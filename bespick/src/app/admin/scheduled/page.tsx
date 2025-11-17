@@ -284,7 +284,7 @@ function DescriptionPreview({ text }: { text: string }) {
   return (
     <div className='mt-4'>
       <p
-        className='text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap break-words'
+        className='text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap wrap-break-word'
         style={{
           display: '-webkit-box',
           WebkitLineClamp: 2,

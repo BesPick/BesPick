@@ -16,6 +16,12 @@ type FundingTier = {
   amount: number;
 };
 
+type FundingButtonConfig = {
+  id: string;
+  fundingSource: NonNullable<PayPalButtonsComponentProps['fundingSource']>;
+  helper?: string;
+};
+
 const FUNDING_TIERS: FundingTier[] = [
   {
     id: '1',
@@ -36,6 +42,38 @@ const FUNDING_TIERS: FundingTier[] = [
     amount: 150,
   },
 ];
+
+const PAYMENT_METHOD_BUTTONS: FundingButtonConfig[] = [
+  {
+    id: 'paypal',
+    fundingSource: 'paypal',
+  },
+  {
+    id: 'venmo',
+    fundingSource: 'venmo',
+    helper: 'Requires a Venmo account linked to PayPal.',
+  },
+  {
+    id: 'card',
+    fundingSource: 'card',
+    helper: 'Checkout without signing in to PayPal.',
+  },
+];
+
+const FUNDING_STYLE_OVERRIDES: Partial<
+  Record<
+    FundingButtonConfig['fundingSource'],
+    NonNullable<PayPalButtonsComponentProps['style']>
+  >
+> = {
+  venmo: {
+    color: 'blue',
+  },
+  card: {
+    label: 'pay',
+    color: 'black',
+  },
+};
 
 const currencyFormatter = (currency: string) =>
   new Intl.NumberFormat('en-US', {
@@ -80,6 +118,7 @@ export function PayPalCheckout() {
       currency,
       intent: 'capture',
       components: 'buttons',
+      enableFunding: ['venmo', 'card'],
     }),
     [clientId, currency],
   );
@@ -105,7 +144,7 @@ export function PayPalCheckout() {
 
   const paypalButtonProps: PayPalButtonsComponentProps = {
     style: {
-      shape: 'rect',
+      shape: 'sharp',
       color: 'gold',
       label: 'pay',
       height: 48,
@@ -318,7 +357,7 @@ export function PayPalCheckout() {
                     <Info className='h-4 w-4 shrink-0 text-primary' />
                     <p>
                       Your contribution helps the morale team fund upcoming
-                      events, supplies, and recognition moments.
+                      events and restock supplies.
                     </p>
                   </div>
                   <div className='flex items-start gap-2'>
@@ -329,7 +368,24 @@ export function PayPalCheckout() {
                     </p>
                   </div>
                 </div>
-                <PayPalButtons {...paypalButtonProps} />
+                <div className='space-y-5'>
+                  {PAYMENT_METHOD_BUTTONS.map(({ id, fundingSource, helper }) => (
+                    <div key={id} className='space-y-1'>
+                      {/** PayPal restricts styling by funding source, so merge safe overrides */}
+                      <PayPalButtons
+                        {...paypalButtonProps}
+                        fundingSource={fundingSource}
+                        style={{
+                          ...(paypalButtonProps.style ?? {}),
+                          ...(FUNDING_STYLE_OVERRIDES[fundingSource] ?? {}),
+                        }}
+                      />
+                      {helper && (
+                        <p className='text-[11px] text-muted-foreground'>{helper}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 {statusMessage && (
                   <div
                     className={`rounded-xl border px-4 py-3 text-sm ${

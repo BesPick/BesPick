@@ -125,7 +125,7 @@ export function AnnouncementModal({
       </div>
       {previewImage && (
         <div
-          className='fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-4 py-6'
+          className='fixed inset-0 z-60 flex items-center justify-center bg-black/80 px-4 py-6'
           role='dialog'
           aria-modal='true'
           onClick={() => setPreviewImage(null)}
