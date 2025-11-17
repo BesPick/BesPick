@@ -5,6 +5,7 @@ import {
   PayPalButtons,
   PayPalScriptProvider,
   type PayPalButtonsComponentProps,
+  type ReactPayPalScriptOptions,
 } from '@paypal/react-paypal-js';
 import { CheckCircle2, Info, ShieldAlert } from 'lucide-react';
 
@@ -17,21 +18,21 @@ type FundingTier = {
 
 const FUNDING_TIERS: FundingTier[] = [
   {
-    id: 'refreshments',
-    title: 'Refreshments Boost',
-    description: 'Cover snacks and drinks for a morale drop-in.',
+    id: '1',
+    title: 'Micro Boost',
+    description: 'Cover snack and drink restock for a day.',
     amount: 25,
   },
   {
-    id: 'experience',
-    title: 'Team Experience',
-    description: 'Unlock supplies for a themed morale activity.',
+    id: '2',
+    title: 'Team Player',
+    description: 'Give a sizeable donation to fund team events.',
     amount: 50,
   },
   {
-    id: 'full-event',
-    title: 'Full Event Sponsor',
-    description: 'Fund an entire morale session for the squadron.',
+    id: '3',
+    title: 'Big Spender',
+    description: 'Go above and beyond to support BESPIN Morale.',
     amount: 150,
   },
 ];
@@ -73,9 +74,9 @@ export function PayPalCheckout() {
     numericAmount >= 1;
   const amountLabel = isValidAmount ? formatter.format(numericAmount) : null;
 
-  const paypalOptions = useMemo(
+  const paypalOptions = useMemo<ReactPayPalScriptOptions>(
     () => ({
-      'client-id': clientId ?? '',
+      clientId: clientId ?? '',
       currency,
       intent: 'capture',
       components: 'buttons',
@@ -314,14 +315,14 @@ export function PayPalCheckout() {
                 </div>
                 <div className='space-y-2 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground'>
                   <div className='flex items-start gap-2'>
-                    <Info className='h-4 w-4 flex-shrink-0 text-primary' />
+                    <Info className='h-4 w-4 shrink-0 text-primary' />
                     <p>
                       Your contribution helps the morale team fund upcoming
                       events, supplies, and recognition moments.
                     </p>
                   </div>
                   <div className='flex items-start gap-2'>
-                    <CheckCircle2 className='h-4 w-4 flex-shrink-0 text-primary' />
+                    <CheckCircle2 className='h-4 w-4 shrink-0 text-primary' />
                     <p>
                       PayPal sends you a receipt immediately after we capture
                       the payment.

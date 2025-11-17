@@ -1,15 +1,15 @@
 import { Sparkles, ShieldCheck, Clock3 } from 'lucide-react';
 
-import { PayPalCheckout } from '@/components/payments/paypal-checkout';
+import { PayPalCheckout } from '@/components/boost/paypal-checkout';
 
 export const metadata = {
-  title: 'Payments | BESPICK',
+  title: 'Boost | BESPICK',
 };
 
 export default function PaymentsPage() {
   return (
     <section className='mx-auto w-full max-w-5xl px-4 py-16 space-y-12'>
-      <div className='rounded-3xl border border-border bg-gradient-to-br from-primary/5 via-background to-background px-8 py-10 shadow'>
+      <div className='rounded-3xl border border-border bg-linear-to-br from-primary/5 via-background to-background px-8 py-10 shadow'>
         <p className='text-sm font-semibold uppercase tracking-[0.3em] text-primary'>
           Morale Fund
         </p>
@@ -18,8 +18,8 @@ export default function PaymentsPage() {
         </h1>
         <p className='mt-4 text-base text-muted-foreground sm:text-lg'>
           Every contribution feeds directly into morale events, recognition
-          drops, and squadron touchpoints. Use PayPal to send a secure payment in
-          a few clicks—no invoices or manual tracking required.
+          drops, and squadron touchpoints. Use PayPal to send a secure payment
+          in a few clicks—no invoices or manual tracking required.
         </p>
       </div>
 

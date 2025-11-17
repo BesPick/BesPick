@@ -1,6 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import {
+  PayPalButtons,
+  PayPalScriptProvider,
+  type PayPalButtonsComponentProps,
+  type ReactPayPalScriptOptions,
+} from '@paypal/react-paypal-js';
 import { useMutation, useQuery } from 'convex/react';
 import { X, Search } from 'lucide-react';
 import type { Doc } from '../../../convex/_generated/dataModel';
@@ -16,6 +22,12 @@ type VotingModalProps = {
 };
 
 type VoteSelection = {
+  add: number;
+  remove: number;
+};
+
+type VoteAdjustmentPayload = {
+  userId: string;
   add: number;
   remove: number;
 };
@@ -74,6 +86,9 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
   const eventId = currentEvent._id;
   const eventDescription = currentEvent.description;
   const allowRemovals = currentEvent.votingAllowRemovals ?? true;
+  const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
+  const paypalCurrency =
+    process.env.NEXT_PUBLIC_PAYPAL_CURRENCY?.toUpperCase() ?? 'USD';
 
   const normalizeParticipants = React.useCallback(() => {
     return (currentEvent.votingParticipants ?? []).map((participant) => ({
@@ -93,10 +108,11 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
     : 0;
   const [selections, setSelections] = React.useState<Record<string, VoteSelection>>({});
   const [search, setSearch] = React.useState('');
-  const [submitting, setSubmitting] = React.useState(false);
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [transactionId, setTransactionId] = React.useState<string | null>(null);
   const purchaseVotes = useMutation(api.announcements.purchaseVotes);
+  const adjustmentsRef = React.useRef<VoteAdjustmentPayload[]>([]);
   React.useEffect(() => {
     if (liveEvent === null) {
       onClose();
@@ -250,7 +266,27 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
     return { ...sums, addCost, removeCost, totalPrice };
   }, [selections, addPrice, removePrice, allowRemovals]);
 
+  const buildAdjustments = React.useCallback((): VoteAdjustmentPayload[] => {
+    return Object.entries(selections)
+      .map(([userId, selection]) => ({
+        userId,
+        add: selection.add,
+        remove: allowRemovals ? selection.remove : 0,
+      }))
+      .filter((entry) => entry.add > 0 || entry.remove > 0);
+  }, [selections, allowRemovals]);
+
   const hasCart = totals.add + (allowRemovals ? totals.remove : 0) > 0;
+  const totalAmount = totals.totalPrice > 0 ? totals.totalPrice.toFixed(2) : '0.00';
+  const paypalOptions = React.useMemo<ReactPayPalScriptOptions>(
+    () => ({
+      clientId: paypalClientId ?? '',
+      currency: paypalCurrency,
+      intent: 'capture',
+      components: 'buttons',
+    }),
+    [paypalClientId, paypalCurrency],
+  );
   const normalizedSearch = search.trim().toLowerCase();
   const filteredParticipants = React.useMemo(() => {
     if (!normalizedSearch) return participants;
@@ -260,211 +296,355 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
     });
   }, [participants, normalizedSearch]);
 
-  const handleCheckout = React.useCallback(async () => {
-    const adjustments = Object.entries(selections)
-      .map(([userId, selection]) => ({
-        userId,
-        add: selection.add,
-        remove: allowRemovals ? selection.remove : 0,
-      }))
-      .filter((entry) => entry.add > 0 || (allowRemovals && entry.remove > 0));
-
-    if (!adjustments.length) return;
-
-    setSubmitting(true);
-    setStatusMessage(null);
-    setErrorMessage(null);
-    try {
-      const result = await purchaseVotes({
-        id: eventId,
-        adjustments,
-      });
-      if (result.success && Array.isArray(result.participants)) {
-        setParticipants(
-          result.participants.map((participant) => ({
-            ...participant,
-            votes:
-              typeof participant.votes === 'number' &&
-              Number.isFinite(participant.votes)
-                ? Math.max(0, participant.votes)
-                : 0,
-          })),
-        );
-        setSelections({});
-        setStatusMessage('Votes updated successfully.');
-      } else {
-        setStatusMessage('No changes to submit.');
+  const applyVoteAdjustments = React.useCallback(
+    async (
+      adjustments: VoteAdjustmentPayload[],
+    ): Promise<{ success: boolean; message?: string }> => {
+      if (!adjustments.length) {
+        return { success: false, message: 'Select at least one vote change.' };
       }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to submit votes.';
-      setErrorMessage(message);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [selections, purchaseVotes, eventId, allowRemovals]);
+      try {
+        const result = await purchaseVotes({
+          id: eventId,
+          adjustments,
+        });
+        if (result.success && Array.isArray(result.participants)) {
+          setParticipants(
+            result.participants.map((participant) => ({
+              ...participant,
+              votes:
+                typeof participant.votes === 'number' &&
+                Number.isFinite(participant.votes)
+                  ? Math.max(0, participant.votes)
+                  : 0,
+            })),
+          );
+          setSelections({});
+          return { success: true };
+        }
+        return { success: false, message: 'No changes to submit.' };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Failed to submit votes.';
+        return { success: false, message };
+      }
+    },
+    [purchaseVotes, eventId],
+  );
+
+  const paypalButtonsProps = React.useMemo<PayPalButtonsComponentProps>(() => {
+    return {
+      style: {
+        background: 'transparent',
+        shape: 'pill',
+        label: 'pay',
+        layout: 'vertical',
+        height: 48,
+      },
+      disabled:
+        !hasCart ||
+        !paypalClientId ||
+        Number.parseFloat(totalAmount) <= 0,
+      forceReRender: [
+        paypalClientId ?? '',
+        paypalCurrency,
+        hasCart ? 'cart' : 'empty',
+        totalAmount,
+      ],
+      createOrder: async () => {
+        const adjustments = buildAdjustments();
+        if (!adjustments.length) {
+          setErrorMessage(
+            'Select at least one vote change before checking out.',
+          );
+          throw new Error('No adjustments to purchase.');
+        }
+        adjustmentsRef.current = adjustments;
+        setStatusMessage(null);
+        setErrorMessage(null);
+        setTransactionId(null);
+        const response = await fetch('/api/paypal/create-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: totalAmount,
+            currency: paypalCurrency,
+            description: `${currentEvent.title} vote purchase`,
+            referenceId: eventId,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload || typeof payload !== 'object') {
+          const message =
+            (payload as { error?: string }).error ??
+            'Unable to start PayPal checkout.';
+          setErrorMessage(message);
+          throw new Error(message);
+        }
+        const orderId = (payload as { id?: string }).id;
+        if (!orderId) {
+          setErrorMessage('PayPal did not return an order reference.');
+          throw new Error('Missing PayPal order id');
+        }
+        return orderId;
+      },
+      onApprove: async (data) => {
+        if (!data.orderID) {
+          setErrorMessage('Missing PayPal order reference.');
+          return;
+        }
+        try {
+          const response = await fetch('/api/paypal/capture-order', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ orderId: data.orderID }),
+          });
+          const capturePayload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const message =
+              (capturePayload as { error?: string }).error ??
+              'Unable to capture PayPal payment.';
+            setErrorMessage(message);
+            return;
+          }
+          const captureId =
+            capturePayload?.purchase_units?.[0]?.payments?.captures?.[0]?.id ??
+            capturePayload?.id ??
+            data.orderID;
+          const adjustments = adjustmentsRef.current;
+          if (!adjustments.length) {
+            setErrorMessage('Vote selections expired, please try again.');
+            return;
+          }
+          const voteResult = await applyVoteAdjustments(adjustments);
+          if (!voteResult.success) {
+            setErrorMessage(
+              voteResult.message ??
+                'Payment captured but votes could not be updated.',
+            );
+            return;
+          }
+          setErrorMessage(null);
+          setStatusMessage(
+            captureId
+              ? `Payment captured successfully (Ref: ${captureId}). Votes updated.`
+              : 'Payment captured successfully. Votes updated.',
+          );
+          setTransactionId(captureId ?? null);
+        } catch (error) {
+          console.error('PayPal capture error', error);
+          setErrorMessage(
+            'Something went wrong while finalizing the payment. Please try again.',
+          );
+        } finally {
+          adjustmentsRef.current = [];
+        }
+      },
+      onCancel: () => {
+        setStatusMessage('Checkout cancelled. Your selections are still editable.');
+        setErrorMessage(null);
+        adjustmentsRef.current = [];
+      },
+      onError: (err) => {
+        console.error('PayPal checkout error', err);
+        setErrorMessage('PayPal checkout failed. Please try again.');
+        adjustmentsRef.current = [];
+      },
+    };
+  }, [
+    hasCart,
+    paypalClientId,
+    paypalCurrency,
+    totalAmount,
+    buildAdjustments,
+    currentEvent.title,
+    eventId,
+    applyVoteAdjustments,
+  ]);
 
   return (
-    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6'>
-      <div className='w-full max-w-6xl rounded-2xl border border-border bg-card p-6 shadow-2xl'>
-        <div className='grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-          <LeaderboardPanel
-            sections={leaderboardSections}
-            participantsCount={leaderboardParticipants.length}
-            mode={leaderboardMode}
-            activeSection={activeLeaderboardSection}
-            onSelectSection={setActiveLeaderboardId}
-          />
-          <div className='flex min-w-0 flex-col'>
-            <div className='flex items-start justify-between gap-4'>
-              <div>
-                <p className='text-xs font-semibold uppercase tracking-wide text-primary'>
-              {formatEventType(currentEvent.eventType)}
-            </p>
-            <h2 className='mt-1 text-2xl font-semibold text-foreground'>
-              {currentEvent.title}
-            </h2>
-            <p className='mt-1 text-xs text-muted-foreground'>
-              Published {formatDate(currentEvent.publishAt)}
-            </p>
-              </div>
-              <button
-                type='button'
-                onClick={onClose}
-                className='rounded-full border border-border p-2 text-muted-foreground transition hover:text-foreground'
-                aria-label='Close voting modal'
-              >
-                <X className='h-4 w-4' />
-              </button>
+    <div className='fixed inset-0 z-50 overflow-y-auto bg-black/60 px-3 py-4 sm:px-4 sm:py-6'>
+      <div className='mx-auto flex min-h-full items-start justify-center sm:items-center'>
+        <div className='w-full max-w-6xl rounded-2xl border border-border bg-card p-4 shadow-2xl sm:p-6 lg:max-h-[95vh] lg:overflow-hidden'>
+          <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
+            <div className='order-2 lg:order-1'>
+              <LeaderboardPanel
+                sections={leaderboardSections}
+                participantsCount={leaderboardParticipants.length}
+                mode={leaderboardMode}
+                activeSection={activeLeaderboardSection}
+                onSelectSection={setActiveLeaderboardId}
+              />
             </div>
+            <div className='order-1 flex min-w-0 flex-col gap-6 lg:order-2 lg:max-h-[80vh] lg:overflow-y-auto lg:pr-2'>
+              <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4'>
+                <div>
+                  <p className='text-xs font-semibold uppercase tracking-wide text-primary'>
+                    {formatEventType(currentEvent.eventType)}
+                  </p>
+                  <h2 className='mt-1 text-2xl font-semibold text-foreground'>
+                    {currentEvent.title}
+                  </h2>
+                  <p className='mt-1 text-xs text-muted-foreground'>
+                    Published {formatDate(currentEvent.publishAt)}
+                  </p>
+                </div>
+                <div className='flex justify-end sm:justify-start'>
+                  <button
+                    type='button'
+                    onClick={onClose}
+                    className='rounded-full border border-border p-2 text-muted-foreground transition hover:text-foreground'
+                    aria-label='Close voting modal'
+                  >
+                    <X className='h-4 w-4' />
+                  </button>
+                </div>
+              </div>
 
-            {eventDescription && (
-              <p className='mt-4 text-sm leading-relaxed text-foreground'>
-                {eventDescription}
-              </p>
-            )}
+              {eventDescription && (
+                <p className='mt-4 text-sm leading-relaxed text-foreground'>
+                  {eventDescription}
+                </p>
+              )}
 
-            <div className='mt-6 rounded-xl border border-border bg-background/60 p-4'>
-              <div className='flex flex-wrap items-center gap-4 text-sm text-muted-foreground'>
-                <span>
-                  Add vote price:{' '}
-                  <span className='font-semibold text-foreground'>
-                    ${addPrice.toFixed(2)}
-                  </span>
-                </span>
-                {allowRemovals && (
+              <div className='mt-6 rounded-xl border border-border bg-background/60 p-4'>
+                <div className='flex flex-wrap items-center gap-4 text-sm text-muted-foreground'>
                   <span>
-                    Remove vote price:{' '}
+                    Add vote price:{' '}
                     <span className='font-semibold text-foreground'>
-                      ${removePrice.toFixed(2)}
+                      ${addPrice.toFixed(2)}
                     </span>
                   </span>
-                )}
-              </div>
-              <p className='mt-2 text-xs text-muted-foreground'>
-                Enter how many votes to add{allowRemovals ? ' or remove' : ''}, then submit your purchase to update totals.
-              </p>
-            </div>
-
-            <div className='mt-6 flex flex-col gap-3'>
-              <div className='relative'>
-                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
-                <input
-                  type='search'
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder='Search participants by name...'
-                  className='w-full rounded-lg border border-border bg-background pl-10 pr-3 py-2 text-sm text-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-                />
-              </div>
-
-              <div className='max-h-[40vh] overflow-y-auto rounded-xl border border-dashed border-border'>
-                {participants.length === 0 ? (
-                  <p className='p-6 text-sm text-muted-foreground'>
-                    No participants available for this event.
-                  </p>
-                ) : filteredParticipants.length === 0 ? (
-                  <p className='p-6 text-sm text-muted-foreground'>
-                    No participants match your search.
-                  </p>
-                ) : (
-                  <ul>
-                    {filteredParticipants.map((participant) => {
-                      const userId = participant.userId;
-                      const addCount = selections[userId]?.add ?? 0;
-                  const removeCount = selections[userId]?.remove ?? 0;
-                  const currentVotes = Math.max(0, participant.votes ?? 0);
-                      const fullName = getParticipantName(participant);
-                      return (
-                        <li
-                          key={userId}
-                          className='flex flex-wrap items-center justify-between gap-4 border-b border-border/60 px-4 py-3 last:border-b-0'
-                        >
-                      <div>
-                        <p className='font-medium text-foreground'>{fullName}</p>
-                        <p className='text-xs text-muted-foreground'>
-                          Current votes: {currentVotes}
-                        </p>
-                      </div>
-                      <div className='flex flex-wrap items-center gap-4'>
-                        {allowRemovals && (
-                          <VoteAdjuster
-                            label='Remove'
-                            count={removeCount}
-                            price={removePrice}
-                            onSetCount={(value) =>
-                              setSelectionValue(userId, 'remove', value, currentVotes)
-                            }
-                            max={currentVotes}
-                          />
-                        )}
-                        <VoteAdjuster
-                          label='Add'
-                          count={addCount}
-                          price={addPrice}
-                          onSetCount={(value) =>
-                            setSelectionValue(userId, 'add', value)
-                          }
-                        />
-                      </div>
-                    </li>
-                  );
-                    })}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <div className='mt-6 space-y-3 rounded-xl border border-border bg-background/70 p-4'>
-              <SummaryRow label={`Add votes (${totals.add})`} value={totals.addCost} />
-              {allowRemovals && (
-                <SummaryRow label={`Remove votes (${totals.remove})`} value={totals.removeCost} />
-              )}
-              <div className='flex items-center justify-between border-t border-border pt-3 text-lg font-semibold text-foreground'>
-                <span>Total price</span>
-                <span>${totals.totalPrice.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className='mt-4 flex flex-col gap-2'>
-              {statusMessage && (
-                <p className='text-xs text-emerald-500'>{statusMessage}</p>
-              )}
-              {errorMessage && (
-                <p className='text-xs text-destructive'>{errorMessage}</p>
-              )}
-              <div className='flex flex-wrap items-center justify-between gap-3'>
-                <p className='text-xs text-muted-foreground'>
-                  Submit purchases to update vote totals immediately.
+                  {allowRemovals && (
+                    <span>
+                      Remove vote price:{' '}
+                      <span className='font-semibold text-foreground'>
+                        ${removePrice.toFixed(2)}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <p className='mt-2 text-xs text-muted-foreground'>
+                  Enter how many votes to add{allowRemovals ? ' or remove' : ''}, then submit your purchase to update totals.
                 </p>
-                <button
-                  type='button'
-                  disabled={!hasCart || submitting}
-                  onClick={handleCheckout}
-                  className='inline-flex items-center justify-center rounded-md border border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
-                >
-                  {submitting ? 'Submitting…' : 'Submit purchase'}
-                </button>
+              </div>
+
+              <div className='mt-6 flex flex-col gap-3'>
+                <div className='relative'>
+                  <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
+                  <input
+                    type='search'
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder='Search participants by name...'
+                    className='w-full rounded-lg border border-border bg-background py-2 pl-10 pr-3 text-sm text-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+                  />
+                </div>
+
+                <div className='max-h-[50vh] overflow-y-auto rounded-xl border border-dashed border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:max-h-[40vh]'>
+                  {participants.length === 0 ? (
+                    <p className='p-6 text-sm text-muted-foreground'>
+                      No participants available for this event.
+                    </p>
+                  ) : filteredParticipants.length === 0 ? (
+                    <p className='p-6 text-sm text-muted-foreground'>
+                      No participants match your search.
+                    </p>
+                  ) : (
+                    <ul>
+                      {filteredParticipants.map((participant) => {
+                        const userId = participant.userId;
+                        const addCount = selections[userId]?.add ?? 0;
+                        const removeCount = selections[userId]?.remove ?? 0;
+                        const currentVotes = Math.max(0, participant.votes ?? 0);
+                        const fullName = getParticipantName(participant);
+                        return (
+                          <li
+                            key={userId}
+                            className='flex flex-col gap-4 border-b border-border/60 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between'
+                          >
+                            <div className='space-y-1'>
+                              <p className='font-medium text-foreground'>{fullName}</p>
+                              <p className='text-xs text-muted-foreground'>
+                                Current votes: {currentVotes}
+                              </p>
+                            </div>
+                            <div className='flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end'>
+                              {allowRemovals && (
+                                <VoteAdjuster
+                                  label='Remove'
+                                  count={removeCount}
+                                  price={removePrice}
+                                  onSetCount={(value) =>
+                                    setSelectionValue(userId, 'remove', value, currentVotes)
+                                  }
+                                  max={currentVotes}
+                                />
+                              )}
+                              <VoteAdjuster
+                                label='Add'
+                                count={addCount}
+                                price={addPrice}
+                                onSetCount={(value) =>
+                                  setSelectionValue(userId, 'add', value)
+                                }
+                              />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              <div className='mt-6 space-y-3 rounded-xl border border-border bg-background/70 p-4'>
+                <SummaryRow label={`Add votes (${totals.add})`} value={totals.addCost} />
+                {allowRemovals && (
+                  <SummaryRow label={`Remove votes (${totals.remove})`} value={totals.removeCost} />
+                )}
+                <div className='flex items-center justify-between border-t border-border pt-3 text-lg font-semibold text-foreground'>
+                  <span>Total price</span>
+                  <span>${totals.totalPrice.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className='mt-4 flex flex-col gap-2'>
+                {statusMessage && (
+                  <p className='text-xs text-emerald-500'>{statusMessage}</p>
+                )}
+                {errorMessage && (
+                  <p className='text-xs text-destructive'>{errorMessage}</p>
+                )}
+                {transactionId && (
+                  <p className='text-[11px] text-muted-foreground'>
+                    Reference: {transactionId}
+                  </p>
+                )}
+                <div className='space-y-4 rounded-2xl border border-border bg-card/80 p-5 shadow-sm'>
+                  <p className='text-xs text-center font-semibold uppercase tracking-wide text-muted-foreground'>
+                    Securely finalize your votes using an option below
+                  </p>
+                  {paypalClientId ? (
+                    <PayPalScriptProvider deferLoading={false} options={paypalOptions}>
+                      <div className='space-y-3 rounded-2xl border border-border bg-card/80 p-4'>
+                        <PayPalButtons {...paypalButtonsProps} />
+                      </div>
+                    </PayPalScriptProvider>
+                  ) : (
+                    <p className='text-xs text-destructive'>
+                      PayPal is not configured. Set{' '}
+                      <code className='rounded bg-muted px-1 py-0.5 text-[0.8em]'>
+                        NEXT_PUBLIC_PAYPAL_CLIENT_ID
+                      </code>{' '}
+                      and related env vars to enable checkout.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -521,8 +701,8 @@ function VoteAdjuster({
   );
 
   return (
-    <div className='flex flex-col items-center gap-1 rounded-lg border border-border px-3 py-2 text-sm text-foreground'>
-      <span className='text-xs text-muted-foreground text-center'>{label} votes</span>
+    <div className='flex w-full flex-col items-center gap-1 rounded-lg border border-border px-3 py-3 text-sm text-foreground sm:w-auto sm:py-2'>
+      <span className='text-xs text-muted-foreground text-center w-full'>{label} votes</span>
       <input
         type='number'
         min={0}
@@ -530,7 +710,7 @@ function VoteAdjuster({
         inputMode='numeric'
         value={Number.isFinite(count) && count !== 0 ? count : ''}
         onChange={handleManualChange}
-        className='h-8 w-20 rounded border border-border bg-background px-2 text-center text-sm font-semibold text-foreground appearance-none [-moz-appearance:textfield] focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+        className='h-10 w-full rounded border border-border bg-background px-2 text-center text-sm font-semibold text-foreground appearance-none [-moz-appearance:textfield] focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-8 sm:w-20'
         aria-label={`${label} vote quantity`}
       />
       <span className='text-[11px] text-muted-foreground text-center'>

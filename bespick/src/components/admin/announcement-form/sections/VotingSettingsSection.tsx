@@ -75,14 +75,14 @@ export function VotingSettingsSection({
           Voting settings
         </h3>
         <p className='text-sm text-muted-foreground'>
-          Set prices for adding or removing votes and choose
-          who can participate.
+          Set prices for adding or removing votes and choose who can
+          participate.
         </p>
       </div>
 
       <div className='grid gap-4 sm:grid-cols-2'>
         <label className='flex flex-col gap-2 text-sm text-foreground'>
-          Price to add a vote
+          Add Vote Price
           <input
             type='number'
             min='0'
@@ -96,13 +96,16 @@ export function VotingSettingsSection({
         </label>
         <div className='flex flex-col gap-2 text-sm text-foreground'>
           <label className='flex items-center justify-between text-sm font-medium text-foreground'>
-            <span>Allow removing votes</span>
-            <input
-              type='checkbox'
-              checked={allowRemovals}
-              onChange={(event) => onToggleAllowRemovals(event.target.checked)}
-              className='h-4 w-4 rounded border-border accent-primary'
-            />
+            <span className='flex items-center gap-2'>
+              Remove Vote Price
+              <input
+                type='checkbox'
+                checked={allowRemovals}
+                onChange={(event) => onToggleAllowRemovals(event.target.checked)}
+                className='h-4 w-4 rounded border-border accent-primary'
+              />
+              <span className='text-xs text-muted-foreground'>(allow removing votes)</span>
+            </span>
           </label>
           {allowRemovals && (
             <input
@@ -120,7 +123,9 @@ export function VotingSettingsSection({
       </div>
 
       <div className='space-y-2 rounded-xl border border-border bg-background/60 p-4'>
-        <p className='text-sm font-semibold text-foreground'>Leaderboard mode</p>
+        <p className='text-sm font-semibold text-foreground'>
+          Leaderboard mode
+        </p>
         <div className='grid gap-2 sm:grid-cols-3'>
           {leaderboardOptions.map((option) => {
             const checked = leaderboardMode === option.value;
@@ -135,12 +140,16 @@ export function VotingSettingsSection({
                     name='leaderboardMode'
                     value={option.value}
                     checked={checked}
-                    onChange={(event) => onChangeLeaderboardMode(event.target.value)}
+                    onChange={(event) =>
+                      onChangeLeaderboardMode(event.target.value)
+                    }
                     className='h-4 w-4 border-border accent-primary'
                   />
                   {option.label}
                 </span>
-                <span className='text-[11px] text-muted-foreground'>{option.description}</span>
+                <span className='text-[11px] text-muted-foreground'>
+                  {option.description}
+                </span>
               </label>
             );
           })}
@@ -172,7 +181,9 @@ export function VotingSettingsSection({
                   <input
                     type='checkbox'
                     checked={checked}
-                    onChange={(event) => onToggleGroup(group.value, event.target.checked)}
+                    onChange={(event) =>
+                      onToggleGroup(group.value, event.target.checked)
+                    }
                     disabled={locked}
                     className='h-4 w-4 rounded border-border accent-primary'
                   />
@@ -190,7 +201,9 @@ export function VotingSettingsSection({
                     <div className='border-t border-border/40 px-3 py-3'>
                       <div className='flex flex-wrap gap-2'>
                         {group.portfolios.map((portfolio) => {
-                          const lockedPortfolio = Boolean(lockedPortfolios[portfolio]);
+                          const lockedPortfolio = Boolean(
+                            lockedPortfolios[portfolio]
+                          );
                           return (
                             <label
                               key={portfolio}
@@ -200,7 +213,10 @@ export function VotingSettingsSection({
                                 type='checkbox'
                                 checked={portfolioSelections[portfolio]}
                                 onChange={(event) =>
-                                  onTogglePortfolio(portfolio, event.target.checked)
+                                  onTogglePortfolio(
+                                    portfolio,
+                                    event.target.checked
+                                  )
                                 }
                                 disabled={lockedPortfolio}
                                 className='h-4 w-4 rounded border-border accent-primary'

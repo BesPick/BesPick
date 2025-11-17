@@ -31,7 +31,7 @@ export function HeaderActions() {
   const navItems = useMemo(() => {
     const items = [
       { href: '/archive', label: 'Archive', icon: Archive },
-      { href: '/payments', label: 'Payments', icon: CreditCard },
+      { href: '/boost', label: 'Boost', icon: CreditCard },
     ];
 
     if (isAdmin) {
