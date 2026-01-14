@@ -4,7 +4,11 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useApiMutation, useApiQuery } from '@/lib/apiClient';
-import type { Doc, Id } from '@/types/db';
+import type { ActivityStatus, Doc, Id, StorageImage } from '@/types/db';
+import type {
+  CreateAnnouncementArgs,
+  UpdateAnnouncementArgs,
+} from '@/server/services/announcements';
 import { SchedulingSection } from './announcement-form/sections/SchedulingSection';
 import { PollOptionsSection } from './announcement-form/sections/PollOptionsSection';
 import { PollSettingsSection } from './announcement-form/sections/PollSettingsSection';
@@ -93,8 +97,14 @@ export function AnnouncementForm({
   existingActivity?: AnnouncementDoc | null;
 }) {
   const router = useRouter();
-  const createAnnouncement = useApiMutation(api.announcements.create);
-  const updateAnnouncement = useApiMutation(api.announcements.update);
+  const createAnnouncement = useApiMutation<
+    CreateAnnouncementArgs,
+    { id: Id<'announcements'>; status: ActivityStatus }
+  >(api.announcements.create);
+  const updateAnnouncement = useApiMutation<
+    UpdateAnnouncementArgs,
+    { id: Id<'announcements'>; status: ActivityStatus }
+  >(api.announcements.update);
 
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -957,6 +967,7 @@ const [votingLeaderboardMode, setVotingLeaderboardMode] = React.useState<VotingL
           lastName: participant.lastName.trim(),
           group: participant.group ?? null,
           portfolio: participant.portfolio ?? null,
+          votes: participant.votes,
         }))
         .filter(
           (participant) =>
@@ -1365,7 +1376,10 @@ const [votingLeaderboardMode, setVotingLeaderboardMode] = React.useState<VotingL
     date === todayLocalISO &&
     availableTimeSlotsCore.length === 0;
 
-  const imagePreviewUrls = useApiQuery(
+  const imagePreviewUrls = useApiQuery<
+    { ids: Id<'_storage'>[] },
+    StorageImage[]
+  >(
     api.storage.getImageUrls,
     imageIds.length ? { ids: imageIds } : 'skip',
   );

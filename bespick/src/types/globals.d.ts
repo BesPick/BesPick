@@ -1,4 +1,4 @@
-import type { Group, Portfolio } from '@/lib/org';
+import type { Group, Portfolio, Rank, RankCategory } from '@/lib/org';
 
 export {};
 
@@ -10,6 +10,8 @@ declare global {
       role?: Roles;
       group?: Group | null;
       portfolio?: Portfolio | null;
+      rankCategory?: RankCategory | null;
+      rank?: Rank | null;
     };
   }
 }

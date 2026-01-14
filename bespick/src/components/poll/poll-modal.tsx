@@ -4,7 +4,8 @@ import * as React from 'react';
 import { Loader2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApiMutation, useApiQuery } from '@/lib/apiClient';
-import type { Id } from '@/types/db';
+import type { PollBreakdown, PollDetails } from '@/server/services/announcements';
+import type { Id, StorageImage } from '@/types/db';
 
 type PollModalProps = {
   pollId: Id<'announcements'>;
@@ -19,8 +20,15 @@ export function PollModal({
   isAdmin,
   canVote,
 }: PollModalProps) {
-  const poll = useApiQuery(api.announcements.getPoll, { id: pollId }, { liveKeys: ['announcements', 'pollVotes'] });
-  const imageUrls = useApiQuery(
+  const poll = useApiQuery<{ id: Id<'announcements'> }, PollDetails>(
+    api.announcements.getPoll,
+    { id: pollId },
+    { liveKeys: ['announcements', 'pollVotes'] },
+  );
+  const imageUrls = useApiQuery<
+    { ids: Id<'_storage'>[] },
+    StorageImage[]
+  >(
     api.storage.getImageUrls,
     poll?.imageIds && poll.imageIds.length ? { ids: poll.imageIds } : 'skip',
   );
@@ -45,7 +53,10 @@ export function PollModal({
 
   const breakdownArgs =
     isAdmin && showBreakdown ? { id: pollId } : 'skip';
-  const pollBreakdown = useApiQuery(
+  const pollBreakdown = useApiQuery<
+    { id: Id<'announcements'> },
+    PollBreakdown
+  >(
     api.announcements.getPollVoteBreakdown,
     breakdownArgs,
     { liveKeys: ['pollVotes'] },
@@ -291,7 +302,7 @@ export function PollModal({
               className='rounded-full border border-border p-2 text-muted-foreground transition hover:text-foreground'
               aria-label='Close poll'
             >
-              <X className='h-4 w-4' aria-hidden='true' />
+              <X className='h-4 w-4' aria-hidden={true} />
             </button>
           </div>
 
@@ -338,7 +349,7 @@ export function PollModal({
             })}
           </div>
 
-          {poll.pollAllowAdditionalOptions && (
+          {displayPoll.pollAllowAdditionalOptions && (
             <label className='mt-4 flex flex-col gap-2 text-sm text-foreground'>
               Suggest a new option
               <input
@@ -369,13 +380,13 @@ export function PollModal({
                   {totalVotes}
                 </span>
               </p>
-              {poll.closesAt && (
+              {displayPoll.closesAt && (
                 <p className='text-xs text-muted-foreground'>
                   Poll {pollClosed ? 'closed' : 'closes'} on{' '}
                   {new Intl.DateTimeFormat(undefined, {
                     dateStyle: 'medium',
                     timeStyle: 'short',
-                  }).format(new Date(poll.closesAt))}
+                  }).format(new Date(displayPoll.closesAt))}
                 </p>
               )}
               {pollClosed && (

@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 
 import { checkRole } from '@/server/auth/check-role';
-import { isValidGroup, isValidPortfolioForGroup } from '@/lib/org';
+import {
+  isValidGroup,
+  isValidPortfolioForGroup,
+  isValidRankCategory,
+  isValidRankForCategory,
+} from '@/lib/org';
 
 export async function GET() {
   const isAdmin = await checkRole('admin');
@@ -22,12 +27,24 @@ export async function GET() {
         isValidPortfolioForGroup(normalizedGroup, rawPortfolio)
           ? rawPortfolio
           : null;
+      const rawRankCategory = user.publicMetadata.rankCategory;
+      const normalizedRankCategory = isValidRankCategory(rawRankCategory)
+        ? rawRankCategory
+        : null;
+      const rawRank = user.publicMetadata.rank;
+      const normalizedRank =
+        normalizedRankCategory &&
+        isValidRankForCategory(normalizedRankCategory, rawRank)
+          ? rawRank
+          : null;
       return {
         userId: user.id,
         firstName: (user.firstName ?? '').trim(),
         lastName: (user.lastName ?? '').trim(),
         group: normalizedGroup,
         portfolio: normalizedPortfolio,
+        rankCategory: normalizedRankCategory,
+        rank: normalizedRank,
         votes: 0,
       };
     });

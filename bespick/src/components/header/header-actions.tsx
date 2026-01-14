@@ -9,12 +9,12 @@ import {
   useUser,
 } from '@clerk/nextjs';
 import {
-  Archive,
-  CalendarClock,
-  CirclePlus,
-  CreditCard,
+  BadgeCheck,
+  Gamepad2,
+  HeartPulse,
   Layers,
   Menu,
+  Server,
   Users,
   X,
 } from 'lucide-react';
@@ -23,37 +23,61 @@ import { HeaderButton } from '@/components/header/header-button';
 import {
   GROUP_OPTIONS,
   getPortfoliosForGroup,
+  getRanksForCategory,
   isValidGroup,
   isValidPortfolioForGroup,
+  isValidRankCategory,
+  isValidRankForCategory,
   type Group,
   type Portfolio,
+  type Rank,
+  type RankCategory,
+  RANK_CATEGORY_OPTIONS,
 } from '@/lib/org';
 import { updateMyAssignments } from '@/server/actions/assignments';
 
 type AssignmentInfoProps = {
   groupLabel: string;
   portfolioLabel: string;
+  rankCategoryLabel: string;
+  rankLabel: string;
   onEditGroup: () => void;
   onEditPortfolio: () => void;
+  onEditRankCategory: () => void;
+  onEditRank: () => void;
 };
 
 function UserAssignmentMenu({
   groupLabel,
   portfolioLabel,
+  rankCategoryLabel,
+  rankLabel,
   onEditGroup,
   onEditPortfolio,
+  onEditRankCategory,
+  onEditRank,
 }: AssignmentInfoProps) {
   return (
     <UserButton>
       <UserButton.MenuItems>
         <UserButton.Action
+          label={`Rank Type: ${rankCategoryLabel}`}
+          labelIcon={<BadgeCheck className='h-4 w-4' aria-hidden={true} />}
+          onClick={onEditRankCategory}
+        />
+        <UserButton.Action
+          label={`Rank: ${rankLabel}`}
+          labelIcon={<BadgeCheck className='h-4 w-4' aria-hidden={true} />}
+          onClick={onEditRank}
+        />
+        <UserButton.Action
           label={`Group: ${groupLabel}`}
-          labelIcon={<Users className='h-4 w-4' aria-hidden='true' />}
+          labelIcon={<Users className='h-4 w-4' aria-hidden={true} />}
           onClick={onEditGroup}
         />
         <UserButton.Action
           label={`Portfolio: ${portfolioLabel}`}
-          labelIcon={<Layers className='h-4 w-4' aria-hidden='true' />}
+          labelIcon={<Layers className='h-4 w-4' aria-hidden={true} />}
           onClick={onEditPortfolio}
         />
       </UserButton.MenuItems>
@@ -67,12 +91,16 @@ export function HeaderActions() {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [isAssignmentOpen, setIsAssignmentOpen] = useState(false);
   const [assignmentFocus, setAssignmentFocus] = useState<
-    'group' | 'portfolio'
+    'group' | 'portfolio' | 'rankCategory' | 'rank'
   >('group');
   const [assignmentGroup, setAssignmentGroup] = useState<Group | ''>('');
   const [assignmentPortfolio, setAssignmentPortfolio] = useState<
     Portfolio | ''
   >('');
+  const [assignmentRankCategory, setAssignmentRankCategory] = useState<
+    RankCategory | ''
+  >('');
+  const [assignmentRank, setAssignmentRank] = useState<Rank | ''>('');
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [isAssignmentPending, startAssignmentTransition] = useTransition();
 
@@ -86,12 +114,32 @@ export function HeaderActions() {
     isValidPortfolioForGroup(normalizedGroup, rawPortfolio)
       ? rawPortfolio
       : null;
+  const rawRankCategory = user?.publicMetadata?.rankCategory;
+  const normalizedRankCategory = isValidRankCategory(rawRankCategory)
+    ? rawRankCategory
+    : null;
+  const rawRank = user?.publicMetadata?.rank;
+  const normalizedRank =
+    normalizedRankCategory &&
+    isValidRankForCategory(normalizedRankCategory, rawRank)
+      ? rawRank
+      : null;
   const groupLabel = normalizedGroup ?? 'No group assigned';
   const portfolioLabel = normalizedPortfolio ?? 'No portfolio assigned';
+  const rankCategoryLabel = normalizedRankCategory ?? 'No rank category';
+  const rankLabel =
+    normalizedRank ??
+    (normalizedRankCategory === 'Civilian'
+      ? 'N/A'
+      : 'No rank assigned');
 
-  const openAssignmentModal = (focus: 'group' | 'portfolio') => {
+  const openAssignmentModal = (
+    focus: 'group' | 'portfolio' | 'rankCategory' | 'rank',
+  ) => {
     setAssignmentGroup(normalizedGroup ?? '');
     setAssignmentPortfolio(normalizedPortfolio ?? '');
+    setAssignmentRankCategory(normalizedRankCategory ?? '');
+    setAssignmentRank(normalizedRank ?? '');
     setAssignmentFocus(focus);
     setAssignmentError(null);
     setIsAssignmentOpen(true);
@@ -105,16 +153,13 @@ export function HeaderActions() {
 
   const navItems = useMemo(() => {
     const items = [
-      { href: '/archive', label: 'Archive', icon: Archive },
-      { href: '/boost', label: 'Boost', icon: CreditCard },
+      { href: '/hosthub', label: 'HostHub', icon: Server },
+      { href: '/dashboard', label: 'Morale', icon: HeartPulse },
+      { href: '/games', label: 'Games', icon: Gamepad2 },
     ];
 
     if (isAdmin) {
-      items.unshift(
-        { href: '/admin/create', label: 'Create', icon: CirclePlus },
-        { href: '/admin/roster', label: 'Roster', icon: Users },
-        { href: '/admin/scheduled', label: 'Scheduled', icon: CalendarClock }
-      );
+      items.push({ href: '/admin/roster', label: 'Roster', icon: Users });
     }
 
     return items;
@@ -156,7 +201,14 @@ export function HeaderActions() {
     ? getPortfoliosForGroup(assignmentGroup)
     : [];
   const portfolioSelectDisabled =
-    !assignmentGroup || availablePortfolios.length === 0;
+    !assignmentGroup || availablePortfolios.length === 0 || isAssignmentPending;
+  const availableRanks = assignmentRankCategory
+    ? getRanksForCategory(assignmentRankCategory)
+    : [];
+  const rankSelectDisabled =
+    !assignmentRankCategory ||
+    availableRanks.length === 0 ||
+    isAssignmentPending;
 
   const handleAssignmentGroupChange = (value: string) => {
     const nextGroup = value ? (value as Group) : '';
@@ -171,12 +223,28 @@ export function HeaderActions() {
     setAssignmentPortfolio(value ? (value as Portfolio) : '');
   };
 
+  const handleAssignmentRankCategoryChange = (value: string) => {
+    const nextCategory = value ? (value as RankCategory) : '';
+    setAssignmentRankCategory(nextCategory);
+    setAssignmentRank((current) =>
+      current && isValidRankForCategory(nextCategory || null, current)
+        ? current
+        : '',
+    );
+  };
+
+  const handleAssignmentRankChange = (value: string) => {
+    setAssignmentRank(value ? (value as Rank) : '');
+  };
+
   const handleAssignmentSave = () => {
     startAssignmentTransition(async () => {
       setAssignmentError(null);
       const result = await updateMyAssignments({
         group: assignmentGroup ? assignmentGroup : null,
         portfolio: assignmentPortfolio ? assignmentPortfolio : null,
+        rankCategory: assignmentRankCategory ? assignmentRankCategory : null,
+        rank: assignmentRank ? assignmentRank : null,
       });
       if (!result.success) {
         setAssignmentError(result.message);
@@ -205,8 +273,12 @@ export function HeaderActions() {
                 <UserAssignmentMenu
                   groupLabel={groupLabel}
                   portfolioLabel={portfolioLabel}
+                  rankCategoryLabel={rankCategoryLabel}
+                  rankLabel={rankLabel}
                   onEditGroup={() => openAssignmentModal('group')}
                   onEditPortfolio={() => openAssignmentModal('portfolio')}
+                  onEditRankCategory={() => openAssignmentModal('rankCategory')}
+                  onEditRank={() => openAssignmentModal('rank')}
                 />
               </div>
             </SignedIn>
@@ -227,9 +299,9 @@ export function HeaderActions() {
             className='inline-flex items-center justify-center rounded-md border border-border bg-secondary/80 p-2 text-foreground transition hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
           >
             {open ? (
-              <X className='h-5 w-5' aria-hidden='true' />
+              <X className='h-5 w-5' aria-hidden={true} />
             ) : (
-              <Menu className='h-5 w-5' aria-hidden='true' />
+              <Menu className='h-5 w-5' aria-hidden={true} />
             )}
             <span className='sr-only'>Toggle navigation</span>
           </button>
@@ -237,8 +309,12 @@ export function HeaderActions() {
             <UserAssignmentMenu
               groupLabel={groupLabel}
               portfolioLabel={portfolioLabel}
+              rankCategoryLabel={rankCategoryLabel}
+              rankLabel={rankLabel}
               onEditGroup={() => openAssignmentModal('group')}
               onEditPortfolio={() => openAssignmentModal('portfolio')}
+              onEditRankCategory={() => openAssignmentModal('rankCategory')}
+              onEditRank={() => openAssignmentModal('rank')}
             />
           </SignedIn>
         </ClerkLoaded>
@@ -291,10 +367,54 @@ export function HeaderActions() {
               Update assignments
             </h2>
             <p className='mt-1 text-sm text-muted-foreground'>
-              Choose a group and portfolio for your profile.
+              Choose a rank, group, and portfolio for your profile.
             </p>
 
             <div className='mt-5 space-y-4'>
+              <label className='flex flex-col gap-2 text-sm text-foreground'>
+                Rank Category
+                <select
+                  value={assignmentRankCategory}
+                  onChange={(event) =>
+                    handleAssignmentRankCategoryChange(event.target.value)
+                  }
+                  autoFocus={assignmentFocus === 'rankCategory'}
+                  className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
+                >
+                  <option value=''>No rank category</option>
+                  {RANK_CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className='flex flex-col gap-2 text-sm text-foreground'>
+                Rank
+                <select
+                  value={assignmentRank}
+                  onChange={(event) =>
+                    handleAssignmentRankChange(event.target.value)
+                  }
+                  disabled={rankSelectDisabled}
+                  autoFocus={assignmentFocus === 'rank'}
+                  className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
+                >
+                  <option value=''>No rank assigned</option>
+                  {availableRanks.map((rankOption) => (
+                    <option key={rankOption} value={rankOption}>
+                      {rankOption}
+                    </option>
+                  ))}
+                </select>
+                <span className='text-xs text-muted-foreground'>
+                  {rankSelectDisabled
+                    ? 'Select a rank category with levels to enable this field.'
+                    : ''}
+                </span>
+              </label>
+
               <label className='flex flex-col gap-2 text-sm text-foreground'>
                 Group
                 <select

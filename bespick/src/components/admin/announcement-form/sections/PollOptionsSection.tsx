@@ -38,7 +38,7 @@ export function PollOptionsSection({
               className='inline-flex items-center justify-center rounded-md border border-border bg-secondary p-2 text-foreground hover:opacity-90'
               aria-label={`Delete poll option ${index + 1}`}
             >
-              <Trash2 className='h-4 w-4 text-destructive' aria-hidden='true' />
+              <Trash2 className='h-4 w-4 text-destructive' aria-hidden={true} />
             </button>
           )}
         </div>

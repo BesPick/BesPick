@@ -29,7 +29,7 @@ export function HeaderButton({
     >
       <Icon
         className={`h-5 w-5 transition-transform duration-150 group-hover:scale-110 ${iconClassName}`}
-        aria-hidden='true'
+        aria-hidden={true}
         strokeWidth={1.75}
       />
       {showLabel ? (

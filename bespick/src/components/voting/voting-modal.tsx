@@ -10,7 +10,8 @@ import {
 import { X, Search, Info, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApiMutation, useApiQuery } from '@/lib/apiClient';
-import type { Doc } from '@/types/db';
+import type { PurchaseVotesArgs } from '@/server/services/announcements';
+import type { Doc, Id, VotingParticipant } from '@/types/db';
 import { formatDate, formatEventType } from '@/lib/announcements';
 import { GROUP_OPTIONS } from '@/lib/org';
 
@@ -65,8 +66,12 @@ const NO_PORTFOLIO_KEY = '__no_portfolio__';
 const UNGROUPED_LABEL = 'Ungrouped';
 const NO_PORTFOLIO_LABEL = 'No portfolio';
 
-const GROUP_LABEL_MAP = new Map(GROUP_OPTIONS.map((option) => [option.value, option.label]));
-const KNOWN_GROUP_VALUES = new Set(GROUP_OPTIONS.map((option) => option.value));
+const GROUP_LABEL_MAP = new Map<string, string>(
+  GROUP_OPTIONS.map((option) => [option.value, option.label]),
+);
+const KNOWN_GROUP_VALUES = new Set<string>(
+  GROUP_OPTIONS.map((option) => option.value),
+);
 
 const LEADERBOARD_MODE_INFO: Record<
   LeaderboardMode,
@@ -124,7 +129,10 @@ const createCurrencyFormatter = (currency: string) =>
   });
 
 export function VotingModal({ event, onClose }: VotingModalProps) {
-  const liveEvent = useApiQuery(
+  const liveEvent = useApiQuery<
+    { id: Id<'announcements'> },
+    Announcement | null
+  >(
     api.announcements.get,
     { id: event._id },
     { liveKeys: ['announcements', 'voting'] },
@@ -169,7 +177,14 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
     setStatusState(null);
     setErrorMessage(message);
   }, []);
-  const purchaseVotes = useApiMutation(api.announcements.purchaseVotes);
+  const purchaseVotes = useApiMutation<
+    PurchaseVotesArgs,
+    {
+      success: boolean;
+      participants?: VotingParticipant[];
+      message?: string;
+    }
+  >(api.announcements.purchaseVotes);
   const adjustmentsRef = React.useRef<VoteAdjustmentPayload[]>([]);
   React.useEffect(() => {
     if (liveEvent === null) {

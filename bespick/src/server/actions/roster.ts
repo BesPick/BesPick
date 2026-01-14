@@ -1,14 +1,19 @@
 'use server';
 
-import { clerkClient } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 
 import { checkRole } from '@/server/auth/check-role';
 import {
   type Group,
   type Portfolio,
+  type Rank,
+  type RankCategory,
   getPortfoliosForGroup,
   isValidGroup,
   isValidPortfolioForGroup,
+  getRanksForCategory,
+  isValidRankCategory,
+  isValidRankForCategory,
 } from '@/lib/org';
 
 export type UpdateUserRoleResult = {
@@ -16,6 +21,13 @@ export type UpdateUserRoleResult = {
   role: string | null;
   group: Group | null;
   portfolio: Portfolio | null;
+  rankCategory: RankCategory | null;
+  rank: Rank | null;
+  message: string;
+};
+
+export type DeleteUserResult = {
+  success: boolean;
   message: string;
 };
 
@@ -26,11 +38,15 @@ export async function updateUserRole({
   role,
   group,
   portfolio,
+  rankCategory,
+  rank,
 }: {
   id: string;
   role: string | null;
   group?: string | null;
   portfolio?: string | null;
+  rankCategory?: string | null;
+  rank?: string | null;
 }): Promise<UpdateUserRoleResult> {
   if (!(await checkRole('admin'))) {
     return {
@@ -38,6 +54,8 @@ export async function updateUserRole({
       role: null,
       group: null,
       portfolio: null,
+      rankCategory: null,
+      rank: null,
       message: 'You are not authorized to perform this action.',
     };
   }
@@ -50,6 +68,9 @@ export async function updateUserRole({
     const existingGroup = (user.publicMetadata.group as Group | null) ?? null;
     const existingPortfolio =
       (user.publicMetadata.portfolio as Portfolio | null) ?? null;
+    const existingRankCategory =
+      (user.publicMetadata.rankCategory as RankCategory | null) ?? null;
+    const existingRank = (user.publicMetadata.rank as Rank | null) ?? null;
     const normalizedRole = normalizeRole(role);
 
     const normalizedGroup =
@@ -83,11 +104,42 @@ export async function updateUserRole({
       normalizedPortfolio = null;
     }
 
+    const normalizedRankCategory =
+      rankCategory === undefined
+        ? isValidRankCategory(existingRankCategory)
+          ? existingRankCategory
+          : null
+        : isValidRankCategory(rankCategory)
+          ? rankCategory
+          : null;
+
+    let normalizedRank: Rank | null;
+    if (rank === undefined) {
+      normalizedRank =
+        normalizedRankCategory &&
+        existingRank &&
+        isValidRankForCategory(normalizedRankCategory, existingRank)
+          ? existingRank
+          : null;
+    } else {
+      normalizedRank =
+        normalizedRankCategory &&
+        isValidRankForCategory(normalizedRankCategory, rank)
+          ? rank
+          : null;
+    }
+
+    if (getRanksForCategory(normalizedRankCategory).length === 0) {
+      normalizedRank = null;
+    }
+
     const nextMetadata = {
       ...user.publicMetadata,
       role: normalizedRole,
       group: normalizedGroup,
       portfolio: normalizedPortfolio,
+      rankCategory: normalizedRankCategory,
+      rank: normalizedRank,
     } as Record<string, unknown>;
 
     const response = await client.users.updateUserMetadata(id, {
@@ -100,6 +152,16 @@ export async function updateUserRole({
     const nextGroup = (response.publicMetadata.group as Group | null) ?? null;
     const nextPortfolio =
       (response.publicMetadata.portfolio as Portfolio | null) ?? null;
+    const nextRankCategory = isValidRankCategory(
+      response.publicMetadata.rankCategory,
+    )
+      ? response.publicMetadata.rankCategory
+      : null;
+    const nextRank =
+      nextRankCategory &&
+      isValidRankForCategory(nextRankCategory, response.publicMetadata.rank)
+        ? response.publicMetadata.rank
+        : null;
 
     const successMessage =
       normalizedRole !== normalizedExistingRole
@@ -113,6 +175,8 @@ export async function updateUserRole({
       role: nextRole,
       group: nextGroup,
       portfolio: nextPortfolio,
+      rankCategory: nextRankCategory,
+      rank: nextRank,
       message: successMessage,
     };
   } catch (error) {
@@ -122,7 +186,48 @@ export async function updateUserRole({
       role: null,
       group: null,
       portfolio: null,
+      rankCategory: null,
+      rank: null,
       message: 'Updating the role failed. Please try again.',
+    };
+  }
+}
+
+export async function deleteRosterUser(id: string): Promise<DeleteUserResult> {
+  if (!(await checkRole('admin'))) {
+    return {
+      success: false,
+      message: 'You are not authorized to perform this action.',
+    };
+  }
+
+  const { userId } = await auth();
+  if (!userId) {
+    return {
+      success: false,
+      message: 'You must be signed in to perform this action.',
+    };
+  }
+
+  if (userId === id) {
+    return {
+      success: false,
+      message: 'You cannot delete your own account.',
+    };
+  }
+
+  try {
+    const client = await clerkClient();
+    await client.users.deleteUser(id);
+    return {
+      success: true,
+      message: 'User deleted successfully.',
+    };
+  } catch (error) {
+    console.error('Failed to delete user', error);
+    return {
+      success: false,
+      message: 'Deleting the user failed. Please try again.',
     };
   }
 }

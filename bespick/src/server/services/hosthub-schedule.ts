@@ -1,0 +1,662 @@
+import { clerkClient, currentUser } from '@clerk/nextjs/server';
+import { and, desc, eq, gt, gte, inArray, lt, lte, or } from 'drizzle-orm';
+
+import { db } from '@/server/db/client';
+import {
+  demoDayAssignments,
+  scheduleEventOverrides,
+  scheduleRules,
+  standupAssignments,
+} from '@/server/db/schema';
+import {
+  isValidRankCategory,
+  isValidRankForCategory,
+  type EnlistedRank,
+  type OfficerRank,
+  type Rank,
+  type RankCategory,
+} from '@/lib/org';
+import {
+  isHostHubEventType,
+  isValidDateKey,
+  type HostHubEventType,
+} from '@/lib/hosthub-events';
+import {
+  DEFAULT_SCHEDULE_RULES,
+  normalizeScheduleRuleConfig,
+  type ScheduleRuleConfig,
+  type ScheduleRuleId,
+} from '@/lib/hosthub-schedule-rules';
+
+export type DemoDayAssignee = {
+  userId: string;
+  name: string;
+};
+
+export type StandupAssignee = {
+  userId: string;
+  name: string;
+};
+
+export type DemoDayAssignment = {
+  date: string;
+  userId: string | null;
+  userName: string;
+  assignedAt: number;
+};
+
+export type StandupAssignment = {
+  date: string;
+  userId: string | null;
+  userName: string;
+  assignedAt: number;
+};
+
+export type ScheduleEventOverride = {
+  id: string;
+  date: string;
+  eventType: HostHubEventType;
+  movedToDate: string | null;
+  time: string | null;
+  isCanceled: boolean;
+  updatedAt: number;
+  updatedBy: string | null;
+};
+
+const MONTH_WINDOW = [-1, 0, 1, 2, 3];
+const HISTORY_MONTH_LIMIT = 12;
+const DEMO_DAY_WEEKDAY = 3;
+const STANDUP_DAYS = new Set([1, 4]);
+const RULE_IDS: ScheduleRuleId[] = ['demo-day', 'standup'];
+
+const pad2 = (value: number) => value.toString().padStart(2, '0');
+
+export const toDateKey = (date: Date) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate(),
+  )}`;
+
+const getDefaultRule = (ruleId: ScheduleRuleId) =>
+  DEFAULT_SCHEDULE_RULES[ruleId];
+
+export async function getScheduleRuleConfig(
+  ruleId: ScheduleRuleId,
+): Promise<ScheduleRuleConfig> {
+  const defaultRule = getDefaultRule(ruleId);
+  if (!RULE_IDS.includes(ruleId)) {
+    return defaultRule;
+  }
+
+  const rows = await db
+    .select()
+    .from(scheduleRules)
+    .where(eq(scheduleRules.id, ruleId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return defaultRule;
+
+  try {
+    return normalizeScheduleRuleConfig(
+      JSON.parse(row.configJson),
+      defaultRule,
+    );
+  } catch (error) {
+    console.error('Failed to parse schedule rule config', error);
+    return defaultRule;
+  }
+}
+
+export async function saveScheduleRuleConfig({
+  ruleId,
+  config,
+  updatedBy,
+}: {
+  ruleId: ScheduleRuleId;
+  config: ScheduleRuleConfig;
+  updatedBy?: string | null;
+}): Promise<ScheduleRuleConfig> {
+  const normalized = normalizeScheduleRuleConfig(
+    config,
+    getDefaultRule(ruleId),
+  );
+  const payload = {
+    id: ruleId,
+    configJson: JSON.stringify(normalized),
+    updatedAt: Date.now(),
+    updatedBy: updatedBy ?? null,
+  };
+
+  await db
+    .insert(scheduleRules)
+    .values(payload)
+    .onConflictDoUpdate({
+      target: scheduleRules.id,
+      set: {
+        configJson: payload.configJson,
+        updatedAt: payload.updatedAt,
+        updatedBy: payload.updatedBy,
+      },
+    });
+
+  return normalized;
+}
+
+const isEligibleForRule = ({
+  rule,
+  rankCategory,
+  rank,
+}: {
+  rule: ScheduleRuleConfig;
+  rankCategory: RankCategory | null;
+  rank: Rank | null;
+}) => {
+  if (!isValidRankCategory(rankCategory)) return false;
+  if (!rule.eligibleRankCategories.includes(rankCategory)) return false;
+  if (rankCategory === 'Civilian') return true;
+  if (!isValidRankForCategory(rankCategory, rank)) return false;
+  if (rankCategory === 'Enlisted') {
+    return rule.eligibleEnlistedRanks.includes(rank as EnlistedRank);
+  }
+  return rule.eligibleOfficerRanks.includes(rank as OfficerRank);
+};
+
+const getHistoryCutoffKey = (baseDate: Date) => {
+  const cutoff = new Date(baseDate);
+  cutoff.setMonth(cutoff.getMonth() - HISTORY_MONTH_LIMIT);
+  return toDateKey(cutoff);
+};
+
+const addMonths = (date: Date, offset: number) =>
+  new Date(date.getFullYear(), date.getMonth() + offset, 1);
+
+const getMonthRange = (date: Date) => {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { start, end };
+};
+
+const getFirstWednesdayKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const offset =
+    (DEMO_DAY_WEEKDAY - firstDay.getDay() + 7) % 7;
+  const day = 1 + offset;
+  return `${year}-${pad2(month + 1)}-${pad2(day)}`;
+};
+
+const mulberry32 = (seed: number) => {
+  let t = seed;
+  return () => {
+    t += 0x6d2b79f5;
+    let result = Math.imul(t ^ (t >>> 15), 1 | t);
+    result ^= result + Math.imul(result ^ (result >>> 7), 61 | result);
+    return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const pickRandom = <T,>(items: T[], seed?: number): T | null => {
+  if (items.length === 0) return null;
+  const index = seed === undefined
+    ? Math.floor(Math.random() * items.length)
+    : Math.floor(mulberry32(seed)() * items.length);
+  return items[index] ?? null;
+};
+
+const getStandupDateKeysForWindow = (baseDate: Date) => {
+  const keys: string[] = [];
+  for (const offset of MONTH_WINDOW) {
+    const monthDate = addMonths(baseDate, offset);
+    const { start, end } = getMonthRange(monthDate);
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      if (STANDUP_DAYS.has(cursor.getDay())) {
+        keys.push(toDateKey(cursor));
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  return keys;
+};
+
+const getStandupDateKeysForMonth = (date: Date) => {
+  const keys: string[] = [];
+  const { start, end } = getMonthRange(date);
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    if (STANDUP_DAYS.has(cursor.getDay())) {
+      keys.push(toDateKey(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
+};
+
+export async function ensureDemoDayAssignmentsForWindow({
+  baseDate,
+  eligibleUsers,
+}: {
+  baseDate: Date;
+  eligibleUsers: DemoDayAssignee[];
+}): Promise<Record<string, DemoDayAssignment>> {
+  await pruneDemoDayHistory(new Date());
+  const { end: currentMonthEnd } = getMonthRange(baseDate);
+  const currentMonthEndKey = toDateKey(currentMonthEnd);
+  await db
+    .delete(demoDayAssignments)
+    .where(gt(demoDayAssignments.date, currentMonthEndKey));
+  const todayKey = toDateKey(new Date());
+  const dateKeys = MONTH_WINDOW.map((offset) =>
+    getFirstWednesdayKey(addMonths(baseDate, offset)),
+  );
+  const assignableKeys = new Set([getFirstWednesdayKey(baseDate)]);
+
+  const existingRows = await db
+    .select()
+    .from(demoDayAssignments)
+    .where(inArray(demoDayAssignments.date, dateKeys));
+
+  const assignments = new Map<string, DemoDayAssignment>();
+  existingRows.forEach((row) => {
+    const isFutureOrToday = row.date >= todayKey;
+    if (!row.userId && isFutureOrToday) {
+      return;
+    }
+    assignments.set(row.date, {
+      date: row.date,
+      userId: row.userId ?? null,
+      userName: row.userName,
+      assignedAt: row.assignedAt,
+    });
+  });
+
+  const missingAssignableKeys = dateKeys.filter(
+    (dateKey) => assignableKeys.has(dateKey) && !assignments.has(dateKey),
+  );
+
+  if (missingAssignableKeys.length === 0 || eligibleUsers.length === 0) {
+    return Object.fromEntries(assignments.entries());
+  }
+
+  const history = await db
+    .select()
+    .from(demoDayAssignments)
+    .orderBy(desc(demoDayAssignments.date));
+
+  const eligibleIds = new Set(eligibleUsers.map((user) => user.userId));
+  const used = new Set<string>();
+  for (const row of history) {
+    if (row.userId && eligibleIds.has(row.userId)) {
+      used.add(row.userId);
+      if (used.size >= eligibleUsers.length) break;
+    }
+  }
+
+  let available = eligibleUsers.filter(
+    (user) => !used.has(user.userId),
+  );
+
+  for (const dateKey of missingAssignableKeys) {
+    if (assignments.has(dateKey)) continue;
+
+    let assignee: DemoDayAssignee | null = null;
+    if (eligibleUsers.length > 0) {
+      if (available.length === 0) {
+        available = [...eligibleUsers];
+      }
+      assignee = pickRandom(available);
+      if (assignee) {
+        available = available.filter(
+          (user) => user.userId !== assignee?.userId,
+        );
+      }
+    }
+
+    const row: DemoDayAssignment = {
+      date: dateKey,
+      userId: assignee?.userId ?? null,
+      userName: assignee?.name ?? 'TBD',
+      assignedAt: Date.now(),
+    };
+
+    await db
+      .insert(demoDayAssignments)
+      .values({
+        date: row.date,
+        userId: row.userId,
+        userName: row.userName,
+        assignedAt: row.assignedAt,
+      })
+      .onConflictDoUpdate({
+        target: demoDayAssignments.date,
+        set: {
+          userId: row.userId,
+          userName: row.userName,
+          assignedAt: row.assignedAt,
+        },
+      });
+
+    assignments.set(dateKey, row);
+  }
+
+  return Object.fromEntries(assignments.entries());
+}
+
+export async function getEligibleDemoDayRoster(): Promise<DemoDayAssignee[]> {
+  const user = await currentUser();
+  if (!user) return [];
+  const rule = await getScheduleRuleConfig('demo-day');
+
+  try {
+    const client = await clerkClient();
+    const users = await client.users.getUserList({ limit: 200 });
+    return users.data
+      .map((rosterUser) => {
+        const rankCategory =
+          rosterUser.publicMetadata.rankCategory as RankCategory | null;
+        const rank = rosterUser.publicMetadata.rank as Rank | null;
+        if (!isEligibleForRule({ rule, rankCategory, rank })) {
+          return null;
+        }
+        const fullName =
+          `${rosterUser.firstName ?? ''} ${rosterUser.lastName ?? ''}`.trim();
+        const name =
+          fullName ||
+          rosterUser.username ||
+          rosterUser.emailAddresses[0]?.emailAddress ||
+          null;
+        if (!name) return null;
+        return {
+          userId: rosterUser.id,
+          name,
+        };
+      })
+      .filter((value): value is DemoDayAssignee => Boolean(value));
+  } catch (error) {
+    console.error('Failed to load roster names', error);
+    return [];
+  }
+}
+
+export async function getEligibleStandupRoster(): Promise<StandupAssignee[]> {
+  const user = await currentUser();
+  if (!user) return [];
+  const rule = await getScheduleRuleConfig('standup');
+
+  try {
+    const client = await clerkClient();
+    const users = await client.users.getUserList({ limit: 200 });
+    return users.data
+      .map((rosterUser) => {
+        const rankCategory =
+          rosterUser.publicMetadata.rankCategory as RankCategory | null;
+        const rank = rosterUser.publicMetadata.rank as Rank | null;
+        if (!isEligibleForRule({ rule, rankCategory, rank })) {
+          return null;
+        }
+
+        const fullName =
+          `${rosterUser.firstName ?? ''} ${rosterUser.lastName ?? ''}`.trim();
+        const name =
+          fullName ||
+          rosterUser.username ||
+          rosterUser.emailAddresses[0]?.emailAddress ||
+          null;
+        if (!name) return null;
+        return {
+          userId: rosterUser.id,
+          name,
+        };
+      })
+      .filter((value): value is StandupAssignee => Boolean(value));
+  } catch (error) {
+    console.error('Failed to load standup roster', error);
+    return [];
+  }
+}
+
+export async function ensureStandupAssignmentsForWindow({
+  baseDate,
+  eligibleUsers,
+}: {
+  baseDate: Date;
+  eligibleUsers: StandupAssignee[];
+}): Promise<Record<string, StandupAssignment>> {
+  const { end: currentMonthEnd } = getMonthRange(baseDate);
+  const currentMonthEndKey = toDateKey(currentMonthEnd);
+  await db
+    .delete(standupAssignments)
+    .where(gt(standupAssignments.date, currentMonthEndKey));
+  const todayKey = toDateKey(new Date());
+  const dateKeys = getStandupDateKeysForWindow(baseDate);
+  const assignableKeys = new Set(getStandupDateKeysForMonth(baseDate));
+
+  const existingRows = await db
+    .select()
+    .from(standupAssignments)
+    .where(inArray(standupAssignments.date, dateKeys));
+
+  const assignments = new Map<string, StandupAssignment>();
+  existingRows.forEach((row) => {
+    const isFutureOrToday = row.date >= todayKey;
+    if (!row.userId && isFutureOrToday) {
+      return;
+    }
+    assignments.set(row.date, {
+      date: row.date,
+      userId: row.userId ?? null,
+      userName: row.userName,
+      assignedAt: row.assignedAt,
+    });
+  });
+
+  const missingAssignableKeys = dateKeys.filter(
+    (dateKey) => assignableKeys.has(dateKey) && !assignments.has(dateKey),
+  );
+
+  if (missingAssignableKeys.length === 0 || eligibleUsers.length === 0) {
+    return Object.fromEntries(assignments.entries());
+  }
+
+  const history = await db
+    .select()
+    .from(standupAssignments)
+    .orderBy(desc(standupAssignments.date));
+
+  const eligibleIds = new Set(eligibleUsers.map((user) => user.userId));
+  const used = new Set<string>();
+  for (const row of history) {
+    if (row.userId && eligibleIds.has(row.userId)) {
+      used.add(row.userId);
+      if (used.size >= eligibleUsers.length) break;
+    }
+  }
+
+  let available = eligibleUsers.filter(
+    (user) => !used.has(user.userId),
+  );
+
+  for (const dateKey of missingAssignableKeys) {
+    if (assignments.has(dateKey)) continue;
+
+    let assignee: StandupAssignee | null = null;
+    if (eligibleUsers.length > 0) {
+      if (available.length === 0) {
+        available = [...eligibleUsers];
+      }
+      assignee = pickRandom(available);
+      if (assignee) {
+        available = available.filter(
+          (user) => user.userId !== assignee?.userId,
+        );
+      }
+    }
+
+    const row: StandupAssignment = {
+      date: dateKey,
+      userId: assignee?.userId ?? null,
+      userName: assignee?.name ?? 'TBD',
+      assignedAt: Date.now(),
+    };
+
+    await db
+      .insert(standupAssignments)
+      .values({
+        date: row.date,
+        userId: row.userId,
+        userName: row.userName,
+        assignedAt: row.assignedAt,
+      })
+      .onConflictDoUpdate({
+        target: standupAssignments.date,
+        set: {
+          userId: row.userId,
+          userName: row.userName,
+          assignedAt: row.assignedAt,
+        },
+      });
+
+    assignments.set(dateKey, row);
+  }
+
+  return Object.fromEntries(assignments.entries());
+}
+
+export async function listStandupAssignmentsInRange({
+  startDate,
+  endDate,
+}: {
+  startDate: Date;
+  endDate: Date;
+}): Promise<StandupAssignment[]> {
+  const startKey = toDateKey(startDate);
+  const endKey = toDateKey(endDate);
+  const rows = await db
+    .select()
+    .from(standupAssignments)
+    .where(
+      and(
+        gte(standupAssignments.date, startKey),
+        lte(standupAssignments.date, endKey),
+      ),
+    )
+    .orderBy(desc(standupAssignments.date));
+
+  return rows.map((row) => ({
+    date: row.date,
+    userId: row.userId ?? null,
+    userName: row.userName,
+    assignedAt: row.assignedAt,
+  }));
+}
+
+export async function listScheduleEventOverridesInRange({
+  startDate,
+  endDate,
+}: {
+  startDate: Date;
+  endDate: Date;
+}): Promise<ScheduleEventOverride[]> {
+  const startKey = toDateKey(startDate);
+  const endKey = toDateKey(endDate);
+  const rows = await db
+    .select()
+    .from(scheduleEventOverrides)
+    .where(
+      or(
+        and(
+          gte(scheduleEventOverrides.date, startKey),
+          lte(scheduleEventOverrides.date, endKey),
+        ),
+        and(
+          gte(scheduleEventOverrides.movedToDate, startKey),
+          lte(scheduleEventOverrides.movedToDate, endKey),
+        ),
+      ),
+    )
+    .orderBy(desc(scheduleEventOverrides.date));
+
+  return rows
+    .map((row) => {
+      if (!isHostHubEventType(row.eventType)) return null;
+      const movedToDate =
+        row.movedToDate &&
+        isValidDateKey(row.movedToDate) &&
+        row.movedToDate !== row.date
+          ? row.movedToDate
+          : null;
+      return {
+        id: row.id,
+        date: row.date,
+        eventType: row.eventType,
+        movedToDate,
+        time: row.time ?? null,
+        isCanceled: row.isCanceled ?? false,
+        updatedAt: row.updatedAt,
+        updatedBy: row.updatedBy ?? null,
+      };
+    })
+    .filter((row): row is ScheduleEventOverride => Boolean(row));
+}
+
+export async function pruneDemoDayHistory(baseDate: Date = new Date()) {
+  const cutoffKey = getHistoryCutoffKey(baseDate);
+  await db
+    .delete(demoDayAssignments)
+    .where(lt(demoDayAssignments.date, cutoffKey));
+}
+
+export async function listDemoDayAssignmentsInRange({
+  startDate,
+  endDate,
+}: {
+  startDate: Date;
+  endDate: Date;
+}): Promise<DemoDayAssignment[]> {
+  const startKey = toDateKey(startDate);
+  const endKey = toDateKey(endDate);
+  const rows = await db
+    .select()
+    .from(demoDayAssignments)
+    .where(
+      and(
+        gte(demoDayAssignments.date, startKey),
+        lte(demoDayAssignments.date, endKey),
+      ),
+    )
+    .orderBy(desc(demoDayAssignments.date));
+
+  return rows.map((row) => ({
+    date: row.date,
+    userId: row.userId ?? null,
+    userName: row.userName,
+    assignedAt: row.assignedAt,
+  }));
+}
+
+export async function listDemoDayHistory({
+  upToDate = new Date(),
+}: {
+  upToDate?: Date;
+} = {}): Promise<DemoDayAssignment[]> {
+  await pruneDemoDayHistory(upToDate);
+  const todayKey = toDateKey(upToDate);
+  const cutoffKey = getHistoryCutoffKey(upToDate);
+  const rows = await db
+    .select()
+    .from(demoDayAssignments)
+    .where(
+      and(
+        gte(demoDayAssignments.date, cutoffKey),
+        lte(demoDayAssignments.date, todayKey),
+      ),
+    )
+    .orderBy(desc(demoDayAssignments.date));
+
+  return rows.map((row) => ({
+    date: row.date,
+    userId: row.userId ?? null,
+    userName: row.userName,
+    assignedAt: row.assignedAt,
+  }));
+}

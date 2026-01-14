@@ -3,7 +3,12 @@ import { redirect } from 'next/navigation';
 
 import { checkRole } from '@/server/auth/check-role';
 
-import { isValidGroup, isValidPortfolioForGroup } from '@/lib/org';
+import {
+  isValidGroup,
+  isValidPortfolioForGroup,
+  isValidRankCategory,
+  isValidRankForCategory,
+} from '@/lib/org';
 
 import { SearchUsers } from './_components/SearchUsers';
 import { UserRoleCard } from './_components/UserRoleCard';
@@ -33,9 +38,46 @@ export default async function AdminRosterPage({
     : { limit: 100 };
   const users = (await client.users.getUserList(listOptions)).data;
 
+  const getLastName = (user: (typeof users)[number]) =>
+    (user.lastName ?? '').trim();
+  const getFirstName = (user: (typeof users)[number]) =>
+    (user.firstName ?? '').trim();
+  const getFallbackName = (user: (typeof users)[number]) =>
+    (user.username ??
+      user.emailAddresses[0]?.emailAddress ??
+      'Unnamed') as string;
+
   const primaryEmail = (user: (typeof users)[number]) =>
     user.emailAddresses.find((email) => email.id === user.primaryEmailAddressId)
       ?.emailAddress ?? 'No email available';
+
+  const sortedUsers = [...users].sort((a, b) => {
+    const lastA = getLastName(a);
+    const lastB = getLastName(b);
+    if (lastA && lastB) {
+      const lastCompare = lastA.localeCompare(lastB, undefined, {
+        sensitivity: 'base',
+      });
+      if (lastCompare !== 0) return lastCompare;
+    } else if (lastA || lastB) {
+      return lastA ? -1 : 1;
+    }
+
+    const firstA = getFirstName(a);
+    const firstB = getFirstName(b);
+    if (firstA && firstB) {
+      const firstCompare = firstA.localeCompare(firstB, undefined, {
+        sensitivity: 'base',
+      });
+      if (firstCompare !== 0) return firstCompare;
+    } else if (firstA || firstB) {
+      return firstA ? -1 : 1;
+    }
+
+    return getFallbackName(a).localeCompare(getFallbackName(b), undefined, {
+      sensitivity: 'base',
+    });
+  });
 
   return (
     <div className='mx-auto w-full max-w-5xl space-y-8 px-4 py-10'>
@@ -44,8 +86,8 @@ export default async function AdminRosterPage({
           Admin Dashboard
         </h1>
         <p className='mt-2 text-sm text-muted-foreground'>
-          Manage user roles and permissions. Only members with the admin role
-          can access this view. Moderator role has no function currently.
+          Manage user roles and assignments. Only members with the admin role
+          can access this view.
         </p>
       </header>
 
@@ -61,7 +103,7 @@ export default async function AdminRosterPage({
               : 'Search for a user to view and manage their roles data.'}
           </p>
         ) : (
-          users.map((user) => {
+          sortedUsers.map((user) => {
             const rawGroup = user.publicMetadata.group;
             const normalizedGroup = isValidGroup(rawGroup) ? rawGroup : null;
             const rawPortfolio = user.publicMetadata.portfolio;
@@ -69,6 +111,16 @@ export default async function AdminRosterPage({
               normalizedGroup &&
               isValidPortfolioForGroup(normalizedGroup, rawPortfolio)
                 ? rawPortfolio
+                : null;
+            const rawRankCategory = user.publicMetadata.rankCategory;
+            const normalizedRankCategory = isValidRankCategory(rawRankCategory)
+              ? rawRankCategory
+              : null;
+            const rawRank = user.publicMetadata.rank;
+            const normalizedRank =
+              normalizedRankCategory &&
+              isValidRankForCategory(normalizedRankCategory, rawRank)
+                ? rawRank
                 : null;
             return (
               <UserRoleCard
@@ -83,6 +135,8 @@ export default async function AdminRosterPage({
                   role: (user.publicMetadata.role as string) ?? null,
                   group: normalizedGroup,
                   portfolio: normalizedPortfolio,
+                  rankCategory: normalizedRankCategory,
+                  rank: normalizedRank,
                 }}
               />
             );

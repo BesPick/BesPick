@@ -4,7 +4,7 @@ import * as React from 'react';
 import { X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApiQuery } from '@/lib/apiClient';
-import type { Doc } from '@/types/db';
+import type { Doc, Id, StorageImage } from '@/types/db';
 import {
   formatCreator,
   formatDate,
@@ -27,7 +27,10 @@ export function AnnouncementModal({
     () => (announcement.description ?? '').replace(/\r\n/g, '\n'),
     [announcement.description],
   );
-  const imageUrls = useApiQuery(
+  const imageUrls = useApiQuery<
+    { ids: Id<'_storage'>[] },
+    StorageImage[]
+  >(
     api.storage.getImageUrls,
     announcement.imageIds && announcement.imageIds.length
       ? { ids: announcement.imageIds }
@@ -86,7 +89,7 @@ export function AnnouncementModal({
               className='rounded-full border border-border p-2 text-muted-foreground transition hover:text-foreground'
               aria-label='Close announcement'
             >
-              <X className='h-4 w-4' aria-hidden='true' />
+              <X className='h-4 w-4' aria-hidden={true} />
             </button>
           </div>
 
@@ -102,7 +105,7 @@ export function AnnouncementModal({
             )}
             {imageUrls && imageUrls.length > 0 && (
               <div className='mt-4 grid gap-3 sm:grid-cols-2'>
-                {imageUrls.map((image: { id: React.Key | null | undefined; url: React.SetStateAction<string | null> | Blob | undefined; }) => (
+                {imageUrls.map((image) => (
                   <button
                     type='button'
                     key={image.id}

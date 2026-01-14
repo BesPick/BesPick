@@ -4,6 +4,9 @@ import { subscribe } from '@/server/events';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const encoder = new TextEncoder();
+  let cleanup = () => {};
+
   const stream = new ReadableStream({
     start(controller) {
       let closed = false;
@@ -12,7 +15,7 @@ export async function GET() {
       let unsubscribePollVotes = () => {};
       let unsubscribeVoting = () => {};
 
-      const cleanup = () => {
+      cleanup = () => {
         if (closed) return;
         closed = true;
         if (keepAlive) {
@@ -22,12 +25,18 @@ export async function GET() {
         unsubscribeAnnouncements();
         unsubscribePollVotes();
         unsubscribeVoting();
+        try {
+          controller.close();
+        } catch {
+          // No-op: stream may already be closed.
+        }
       };
 
       const send = (data: unknown) => {
         if (closed) return;
         try {
-          controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+          const payload = `data: ${JSON.stringify(data)}\n\n`;
+          controller.enqueue(encoder.encode(payload));
         } catch {
           cleanup();
         }
@@ -42,8 +51,9 @@ export async function GET() {
 
       send({ channel: 'connected' });
       keepAlive = setInterval(() => send({ channel: 'ping' }), 15000);
-      controller.onclose = cleanup;
-      controller.oncancel = cleanup;
+    },
+    cancel() {
+      cleanup();
     },
   });
 

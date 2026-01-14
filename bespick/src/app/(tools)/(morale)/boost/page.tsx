@@ -1,6 +1,7 @@
 import { Sparkles, ShieldCheck, Clock3 } from 'lucide-react';
 
 import { PayPalCheckout } from '@/components/boost/paypal-checkout';
+import { MoraleSubHeader } from '@/components/header/morale-subheader';
 
 export const metadata = {
   title: 'Boost | BESPIN Morale',
@@ -9,6 +10,7 @@ export const metadata = {
 export default function PaymentsPage() {
   return (
     <section className='mx-auto w-full max-w-5xl px-4 py-16 space-y-12'>
+      <MoraleSubHeader />
       <div className='rounded-3xl border border-border bg-linear-to-br from-primary/5 via-background to-background px-8 py-10 shadow'>
         <p className='text-sm font-semibold uppercase tracking-[0.3em] text-primary'>
           Morale Fund

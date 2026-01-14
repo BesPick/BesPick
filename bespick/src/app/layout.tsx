@@ -8,8 +8,8 @@ import './globals.css';
 import { shadcn } from '@clerk/themes';
 
 export const metadata = {
-  title: 'BESPIN Morale',
-  description: 'BESPIN Morale Team',
+  title: 'BESPIN Holocron',
+  description: 'BESPIN Holocron Tool Suite',
 };
 
 const geistSans = Geist({
@@ -88,7 +88,7 @@ export default function RootLayout({
                   className='text-lg font-semibold tracking-tight transition hover:text-primary hover:scale-110 sm:text-xl'
                   aria-label='Go to home'
                 >
-                  BESPIN Morale
+                  BESPIN Holocron
                 </Link>
                 <div className='relative flex items-center'>
                   <HeaderActions />

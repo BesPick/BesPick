@@ -60,7 +60,55 @@ CREATE TABLE IF NOT EXISTS uploads (
   filename TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS demo_day_assignments (
+  date TEXT PRIMARY KEY,
+  user_id TEXT,
+  user_name TEXT NOT NULL,
+  assigned_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_demo_day_assignments_user ON demo_day_assignments(user_id);
+
+CREATE TABLE IF NOT EXISTS standup_assignments (
+  date TEXT PRIMARY KEY,
+  user_id TEXT,
+  user_name TEXT NOT NULL,
+  assigned_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_standup_assignments_user ON standup_assignments(user_id);
+
+CREATE TABLE IF NOT EXISTS schedule_rules (
+  id TEXT PRIMARY KEY,
+  config_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  updated_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS schedule_event_overrides (
+  id TEXT PRIMARY KEY,
+  date TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  moved_to_date TEXT,
+  time TEXT,
+  is_canceled INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  updated_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_schedule_event_overrides_date ON schedule_event_overrides(date);
+CREATE INDEX IF NOT EXISTS idx_schedule_event_overrides_type ON schedule_event_overrides(event_type);
 `);
+
+const overrideColumns = sqlite
+  .prepare("PRAGMA table_info('schedule_event_overrides')")
+  .all() as Array<{ name: string }>;
+const hasMovedToDate = overrideColumns.some(
+  (column) => column.name === 'moved_to_date',
+);
+if (!hasMovedToDate) {
+  sqlite.exec(
+    'ALTER TABLE schedule_event_overrides ADD COLUMN moved_to_date TEXT;',
+  );
+}
 
 export const db = drizzle(sqlite);
 export { sqlite };

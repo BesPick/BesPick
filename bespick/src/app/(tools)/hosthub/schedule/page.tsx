@@ -1,0 +1,52 @@
+import { redirect } from 'next/navigation';
+
+import { HostHubSubHeader } from '@/components/header/hosthub-subheader';
+import { checkRole } from '@/server/auth/check-role';
+import { ScheduleRuleCard } from './_components/schedule-rule-card';
+import { getScheduleRuleConfig } from '@/server/services/hosthub-schedule';
+
+export const metadata = {
+  title: 'Schedule Settings | HostHub',
+};
+
+export default async function HostHubScheduleSettingsPage() {
+  if (!(await checkRole('admin'))) {
+    redirect('/hosthub');
+  }
+
+  const demoDayRule = await getScheduleRuleConfig('demo-day');
+  const standupRule = await getScheduleRuleConfig('standup');
+
+  return (
+    <section className='mx-auto w-full max-w-5xl px-4 py-16 space-y-10'>
+      <HostHubSubHeader />
+      <div className='space-y-6'>
+        <div className='rounded-2xl border border-border bg-card/70 p-6 shadow-sm'>
+          <h2 className='text-2xl font-semibold text-foreground'>
+            Scheduling settings
+          </h2>
+          <p className='mt-2 text-sm text-muted-foreground'>
+            Choose who is eligible for each type of shift. These settings
+            control the random assignments generated for the calendar and My
+            Schedule.
+          </p>
+        </div>
+
+        <div className='grid gap-6 lg:grid-cols-2'>
+          <ScheduleRuleCard
+            ruleId='demo-day'
+            title='Demo Day eligibility'
+            description='Select the ranks that can be assigned to Demo Day.'
+            initialConfig={demoDayRule}
+          />
+          <ScheduleRuleCard
+            ruleId='standup'
+            title='Standup eligibility'
+            description='Select the ranks that can be assigned to Standup.'
+            initialConfig={standupRule}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}

@@ -70,7 +70,68 @@ export const uploads = sqliteTable('uploads', {
   createdAt: integer('created_at', { mode: 'number' }).notNull(),
 });
 
+export const demoDayAssignments = sqliteTable(
+  'demo_day_assignments',
+  {
+    date: text('date').primaryKey(),
+    userId: text('user_id'),
+    userName: text('user_name').notNull(),
+    assignedAt: integer('assigned_at', { mode: 'number' }).notNull(),
+  },
+  (table) => ({
+    userIdx: index('idx_demo_day_assignments_user').on(table.userId),
+  }),
+);
+
+export const standupAssignments = sqliteTable(
+  'standup_assignments',
+  {
+    date: text('date').primaryKey(),
+    userId: text('user_id'),
+    userName: text('user_name').notNull(),
+    assignedAt: integer('assigned_at', { mode: 'number' }).notNull(),
+  },
+  (table) => ({
+    userIdx: index('idx_standup_assignments_user').on(table.userId),
+  }),
+);
+
+export const scheduleRules = sqliteTable('schedule_rules', {
+  id: text('id').primaryKey(),
+  configJson: text('config_json').notNull(),
+  updatedAt: integer('updated_at', { mode: 'number' }).notNull(),
+  updatedBy: text('updated_by'),
+});
+
+export const scheduleEventOverrides = sqliteTable(
+  'schedule_event_overrides',
+  {
+    id: text('id').primaryKey(),
+    date: text('date').notNull(),
+    eventType: text('event_type').notNull(),
+    movedToDate: text('moved_to_date'),
+    time: text('time'),
+    isCanceled: integer('is_canceled', { mode: 'boolean' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'number' }).notNull(),
+    updatedBy: text('updated_by'),
+  },
+  (table) => ({
+    dateIdx: index('idx_schedule_event_overrides_date').on(table.date),
+    typeIdx: index('idx_schedule_event_overrides_type').on(table.eventType),
+  }),
+);
+
 export type AnnouncementRow = typeof announcements.$inferSelect;
 export type AnnouncementInsert = typeof announcements.$inferInsert;
 export type PollVoteRow = typeof pollVotes.$inferSelect;
 export type PollVoteInsert = typeof pollVotes.$inferInsert;
+export type DemoDayAssignmentRow = typeof demoDayAssignments.$inferSelect;
+export type DemoDayAssignmentInsert = typeof demoDayAssignments.$inferInsert;
+export type StandupAssignmentRow = typeof standupAssignments.$inferSelect;
+export type StandupAssignmentInsert = typeof standupAssignments.$inferInsert;
+export type ScheduleRuleRow = typeof scheduleRules.$inferSelect;
+export type ScheduleRuleInsert = typeof scheduleRules.$inferInsert;
+export type ScheduleEventOverrideRow =
+  typeof scheduleEventOverrides.$inferSelect;
+export type ScheduleEventOverrideInsert =
+  typeof scheduleEventOverrides.$inferInsert;

@@ -41,11 +41,14 @@ export function ActivityFormTabs() {
   const [activeType, setActiveType] =
     React.useState<ActivityType>('announcements');
   const isEditing = Boolean(editId);
-  const activity = useApiQuery(
+  const activity = useApiQuery<
+    { id: Id<'announcements'> },
+    AnnouncementDoc | null
+  >(
     api.announcements.get,
     editId ? { id: editId } : 'skip',
     { refreshInterval: 0 },
-  ) as AnnouncementDoc | null | undefined;
+  );
 
   if (isEditing) {
     if (activity === undefined) {
