@@ -8,7 +8,9 @@ APP_VERSION="$(node -p "require('./package.json').version")"
 GIT_SHA="$(git rev-parse --short HEAD)"
 UPLOADS_DIR="${ROOT_DIR}/public/uploads"
 STANDALONE_DIR="${ROOT_DIR}/.next/standalone"
-OVERRIDE_DIR="/etc/systemd/system/holocron.service.d"
+SERVICE_NAME="${SERVICE_NAME:-holocron}"
+PORT="${PORT:-}"
+OVERRIDE_DIR="/etc/systemd/system/${SERVICE_NAME}.service.d"
 OVERRIDE_FILE="${OVERRIDE_DIR}/override.conf"
 
 echo "Setting build metadata (version ${APP_VERSION}, sha ${GIT_SHA})"
@@ -18,6 +20,7 @@ sudo tee "$OVERRIDE_FILE" >/dev/null <<EOF
 Environment=NEXT_PUBLIC_APP_VERSION=${APP_VERSION}
 Environment=NEXT_PUBLIC_GIT_SHA=${GIT_SHA}
 Environment=UPLOADS_DIR=${UPLOADS_DIR}
+${PORT:+Environment=PORT=${PORT}}
 EOF
 
 sudo systemctl daemon-reload
@@ -25,6 +28,9 @@ sudo systemctl daemon-reload
 export NEXT_PUBLIC_APP_VERSION="${APP_VERSION}"
 export NEXT_PUBLIC_GIT_SHA="${GIT_SHA}"
 export UPLOADS_DIR="${UPLOADS_DIR}"
+if [ -n "${PORT}" ]; then
+  export PORT="${PORT}"
+fi
 
 echo "Building app in $ROOT_DIR"
 npm run build
@@ -37,7 +43,7 @@ if [ -d "$STANDALONE_DIR" ]; then
   cp -R "$ROOT_DIR/public" "$STANDALONE_DIR/public"
 fi
 
-echo "Restarting holocron service"
-sudo systemctl restart holocron
+echo "Restarting ${SERVICE_NAME} service"
+sudo systemctl restart "${SERVICE_NAME}"
 
 echo "Deployment complete."

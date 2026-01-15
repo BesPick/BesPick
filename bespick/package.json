@@ -14,7 +14,8 @@
     "release:patch": "npm version patch --no-git-tag-version",
     "release:minor": "npm version minor --no-git-tag-version",
     "release:major": "npm version major --no-git-tag-version",
-    "deploy": "bash scripts/deploy.sh"
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:staging": "SERVICE_NAME=holocron-staging PORT=3001 bash scripts/deploy.sh"
   },
   "dependencies": {
     "@clerk/nextjs": "6.36.7",

@@ -17,18 +17,25 @@ type ClerkUserLike = {
 };
 
 const DEFAULT_ALLOWED_DOMAIN = 'teambespin.us';
-const allowedEmailDomain = (
+const normalizeDomain = (value: string) =>
+  value.trim().toLowerCase().replace(/^@/, '');
+const allowedEmailDomains = (
   process.env.ALLOWED_EMAIL_DOMAIN ??
   process.env.NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN ??
   DEFAULT_ALLOWED_DOMAIN
 )
-  .trim()
-  .toLowerCase();
+  .split(',')
+  .map((entry) => normalizeDomain(entry))
+  .filter(Boolean);
 
 export function isAllowedEmail(email?: string | null) {
-  if (!allowedEmailDomain) return true;
+  if (allowedEmailDomains.length === 0) return true;
   const domain = email?.split('@')[1]?.toLowerCase() ?? '';
-  return domain === allowedEmailDomain;
+  return allowedEmailDomains.includes(domain);
+}
+
+export function getAllowedDomains() {
+  return [...allowedEmailDomains];
 }
 
 export function getPrimaryEmail(user?: ClerkUserLike | null) {

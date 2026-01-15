@@ -27,6 +27,7 @@ BESPIN Holocron is BESPIN's internal operations suite: a single Next.js app that
 - [Authentication & Roles](#authentication--roles)
 - [Deployment Notes](#deployment-notes)
   - [Source Control & Live Updates](#source-control--live-updates)
+  - [Staging Instance (EC2)](#staging-instance-ec2)
   - [Versioning & Release Workflow](#versioning--release-workflow)
   - [AWS EC2 Deployment (Holocron)](#aws-ec2-deployment-holocron)
     - [Instance setup (EC2)](#instance-setup-ec2)
@@ -281,6 +282,90 @@ npm run deploy
 
 `npm run deploy` rebuilds the app, updates systemd env vars with the version + git SHA,
 and restarts the service so the live site reflects the new code.
+
+### Staging Instance (EC2)
+
+Run a separate staging copy on the same EC2 so you can test changes without
+touching the live site.
+
+**1) Create a staging checkout:**
+
+```bash
+cd /home/ubuntu
+git clone https://github.com/BesPick/BesPick.git holocron-staging
+cd /home/ubuntu/holocron-staging/bespick
+cp /home/ubuntu/holocron/bespick/.env ./.env
+```
+
+**2) Install deps and build via staging deploy:**
+
+```bash
+npm install --include=dev
+npm run deploy:staging
+```
+
+**3) Create a staging systemd service:**
+
+```bash
+sudo tee /etc/systemd/system/holocron-staging.service >/dev/null <<'EOF'
+[Unit]
+Description=Holocron Next.js App (Staging)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/holocron-staging/bespick
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=PATH=/home/ubuntu/.nvm/versions/node/v20.11.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/ubuntu/.nvm/versions/node/v20.11.1/bin/node /home/ubuntu/holocron-staging/bespick/.next/standalone/server.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable holocron-staging
+sudo systemctl start holocron-staging
+```
+
+**4) Add Nginx for staging (subdomain):**
+
+```bash
+sudo tee /etc/nginx/sites-available/holocron-staging >/dev/null <<'EOF'
+server {
+  listen 80;
+  server_name staging.holocron.aodom.dev;
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl;
+  server_name staging.holocron.aodom.dev;
+
+  ssl_certificate /etc/ssl/cloudflare/holocron.aodom.dev.pem;
+  ssl_certificate_key /etc/ssl/cloudflare/holocron.aodom.dev.key;
+
+  location / {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+EOF
+
+sudo ln -sf /etc/nginx/sites-available/holocron-staging /etc/nginx/sites-enabled/holocron-staging
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+Now you can test at `https://staging.holocron.aodom.dev` while production
+stays untouched.
 
 ### Versioning & Release Workflow
 
