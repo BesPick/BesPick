@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import {
   PayPalButtons,
   PayPalScriptProvider,
+  usePayPalScriptReducer,
+  useScriptProviderContext,
   type PayPalButtonsComponentProps,
   type ReactPayPalScriptOptions,
 } from '@paypal/react-paypal-js';
@@ -85,6 +87,110 @@ const currencyFormatter = (currency: string) =>
 function clampAmount(input: number) {
   if (Number.isNaN(input)) return NaN;
   return Math.min(input, 10_000);
+}
+
+type PayPalButtonsPanelProps = {
+  amountLabel: string | null;
+  paymentButtons: FundingButtonConfig[];
+  paypalButtonProps: PayPalButtonsComponentProps;
+  status: 'idle' | 'processing' | 'success' | 'error' | 'cancelled';
+  statusMessage: string | null;
+  transactionId: string | null;
+};
+
+function PayPalButtonsPanel({
+  amountLabel,
+  paymentButtons,
+  paypalButtonProps,
+  status,
+  statusMessage,
+  transactionId,
+}: PayPalButtonsPanelProps) {
+  const [{ isPending, isRejected, isResolved }] = usePayPalScriptReducer();
+  const [{ loadingStatusErrorMessage }] = useScriptProviderContext();
+  const showButtons = isResolved && !isRejected;
+
+  return (
+    <div className='space-y-4'>
+      <div>
+        <p className='text-sm font-medium text-muted-foreground'>
+          Amount due
+        </p>
+        <div className='mt-1 text-3xl font-semibold'>
+          {amountLabel ?? '--'}
+        </div>
+      </div>
+      <div className='space-y-2 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground'>
+        <div className='flex items-start gap-2'>
+          <Info className='h-4 w-4 shrink-0 text-primary' />
+          <p>
+            Your contribution helps the morale team fund upcoming
+            events and restock supplies.
+          </p>
+        </div>
+        <div className='flex items-start gap-2'>
+          <CheckCircle2 className='h-4 w-4 shrink-0 text-primary' />
+          <p>
+            PayPal sends you a receipt immediately after we capture
+            the payment.
+          </p>
+        </div>
+      </div>
+      <div className='space-y-5'>
+        {isRejected && (
+          <div className='rounded-xl border border-destructive/60 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
+            PayPal failed to load. Disable blockers and confirm your
+            client ID is valid.
+            {loadingStatusErrorMessage
+              ? ` (${loadingStatusErrorMessage})`
+              : ''}
+          </div>
+        )}
+        {isPending && !isRejected && (
+          <p className='text-xs text-muted-foreground'>
+            Loading PayPal checkout...
+          </p>
+        )}
+        {showButtons &&
+          paymentButtons.map(({ id, fundingSource, helper }) => (
+            <div key={id} className='space-y-1'>
+              {/** PayPal restricts styling by funding source, so merge safe overrides */}
+              <PayPalButtons
+                {...paypalButtonProps}
+                fundingSource={fundingSource}
+                style={{
+                  ...(paypalButtonProps.style ?? {}),
+                  ...(FUNDING_STYLE_OVERRIDES[fundingSource] ?? {}),
+                }}
+              />
+              {helper && (
+                <p className='text-[11px] text-muted-foreground'>{helper}</p>
+              )}
+            </div>
+          ))}
+      </div>
+      {statusMessage && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            status === 'success'
+              ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
+              : status === 'processing'
+                ? 'border-blue-500/50 bg-blue-500/10 text-blue-800 dark:text-blue-200'
+                : status === 'cancelled'
+                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-100'
+                  : 'border-destructive/60 bg-destructive/10 text-destructive'
+          }`}
+        >
+          {statusMessage}
+          {transactionId && (
+            <p className='mt-2 text-xs font-mono'>
+              Reference: {transactionId}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function PayPalCheckout() {
@@ -360,70 +466,14 @@ export function PayPalCheckout() {
             </div>
           ) : (
             <PayPalScriptProvider deferLoading={false} options={paypalOptions}>
-              <div className='space-y-4'>
-                <div>
-                  <p className='text-sm font-medium text-muted-foreground'>
-                    Amount due
-                  </p>
-                  <div className='mt-1 text-3xl font-semibold'>
-                    {amountLabel ?? '--'}
-                  </div>
-                </div>
-                <div className='space-y-2 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground'>
-                  <div className='flex items-start gap-2'>
-                    <Info className='h-4 w-4 shrink-0 text-primary' />
-                    <p>
-                      Your contribution helps the morale team fund upcoming
-                      events and restock supplies.
-                    </p>
-                  </div>
-                  <div className='flex items-start gap-2'>
-                    <CheckCircle2 className='h-4 w-4 shrink-0 text-primary' />
-                    <p>
-                      PayPal sends you a receipt immediately after we capture
-                      the payment.
-                    </p>
-                  </div>
-                </div>
-                <div className='space-y-5'>
-                  {paymentButtons.map(({ id, fundingSource, helper }) => (
-                    <div key={id} className='space-y-1'>
-                      {/** PayPal restricts styling by funding source, so merge safe overrides */}
-                      <PayPalButtons
-                        {...paypalButtonProps}
-                        fundingSource={fundingSource}
-                        style={{
-                          ...(paypalButtonProps.style ?? {}),
-                          ...(FUNDING_STYLE_OVERRIDES[fundingSource] ?? {}),
-                        }}
-                      />
-                      {helper && (
-                        <p className='text-[11px] text-muted-foreground'>{helper}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {statusMessage && (
-                  <div
-                    className={`rounded-xl border px-4 py-3 text-sm ${
-                      status === 'success'
-                        ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
-                        : status === 'processing'
-                          ? 'border-blue-500/50 bg-blue-500/10 text-blue-800 dark:text-blue-200'
-                          : status === 'cancelled'
-                            ? 'border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-100'
-                            : 'border-destructive/60 bg-destructive/10 text-destructive'
-                    }`}
-                  >
-                    {statusMessage}
-                    {transactionId && (
-                      <p className='mt-2 text-xs font-mono'>
-                        Reference: {transactionId}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+              <PayPalButtonsPanel
+                amountLabel={amountLabel}
+                paymentButtons={paymentButtons}
+                paypalButtonProps={paypalButtonProps}
+                status={status}
+                statusMessage={statusMessage}
+                transactionId={transactionId}
+              />
             </PayPalScriptProvider>
           )}
         </div>

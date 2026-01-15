@@ -4,6 +4,8 @@ import * as React from 'react';
 import {
   PayPalButtons,
   PayPalScriptProvider,
+  usePayPalScriptReducer,
+  useScriptProviderContext,
   type PayPalButtonsComponentProps,
   type ReactPayPalScriptOptions,
 } from '@paypal/react-paypal-js';
@@ -803,57 +805,20 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
                         and related env vars to enable checkout.
                       </p>
                     </div>
-                  ) : (
-                    <PayPalScriptProvider deferLoading={false} options={paypalOptions}>
-                      <div className='space-y-4'>
-                        <div>
-                          <p className='text-sm font-medium text-muted-foreground'>Amount due</p>
-                          <div className='mt-1 text-3xl font-semibold'>{amountLabel ?? '--'}</div>
-                        </div>
-                        <div className='space-y-2 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground'>
-                          <div className='flex items-start gap-2'>
-                            <Info className='h-4 w-4 shrink-0 text-primary' />
-                            <p>
-                              Your contribution helps the morale team fund upcoming
-                              events, supplies, and recognition moments.
-                            </p>
-                          </div>
-                          <div className='flex items-start gap-2'>
-                            <CheckCircle2 className='h-4 w-4 shrink-0 text-primary' />
-                            <p>
-                              PayPal sends you a receipt immediately after we capture the payment.
-                            </p>
-                          </div>
-                        </div>
-                        <div className='space-y-5'>
-                          {paymentButtons.map(({ id, fundingSource, helper }) => (
-                            <div key={id} className='space-y-1'>
-                              <PayPalButtons
-                                {...paypalButtonsProps}
-                                fundingSource={fundingSource}
-                                style={{
-                                  ...(paypalButtonsProps.style ?? {}),
-                                  ...(FUNDING_STYLE_OVERRIDES[fundingSource] ?? {}),
-                                }}
-                              />
-                              {helper && (
-                                <p className='text-[11px] text-muted-foreground'>{helper}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        {checkoutFeedbackMessage && (
-                          <div className={`rounded-xl border px-4 py-3 text-sm ${checkoutFeedbackClass}`}>
-                            {checkoutFeedbackMessage}
-                            {transactionId && checkoutFeedbackVariant === 'success' && (
-                              <p className='mt-2 text-xs font-mono'>Reference: {transactionId}</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </PayPalScriptProvider>
-                  )}
-                </div>
+              ) : (
+                <PayPalScriptProvider deferLoading={false} options={paypalOptions}>
+                  <VotingPayPalPanel
+                    amountLabel={amountLabel}
+                    paymentButtons={paymentButtons}
+                    paypalButtonsProps={paypalButtonsProps}
+                    checkoutFeedbackMessage={checkoutFeedbackMessage}
+                    checkoutFeedbackClass={checkoutFeedbackClass}
+                    checkoutFeedbackVariant={checkoutFeedbackVariant}
+                    transactionId={transactionId}
+                  />
+                </PayPalScriptProvider>
+              )}
+            </div>
               </div>
             </div>
           </div>
@@ -1004,6 +969,94 @@ function LeaderboardPanel({
 type LeaderboardSectionCardProps = {
   section: LeaderboardSection;
 };
+
+type VotingPayPalPanelProps = {
+  amountLabel: string | null;
+  paymentButtons: FundingButtonConfig[];
+  paypalButtonsProps: PayPalButtonsComponentProps;
+  checkoutFeedbackMessage: string | null;
+  checkoutFeedbackClass: string;
+  checkoutFeedbackVariant: 'success' | 'cancelled' | 'error' | null;
+  transactionId: string | null;
+};
+
+function VotingPayPalPanel({
+  amountLabel,
+  paymentButtons,
+  paypalButtonsProps,
+  checkoutFeedbackMessage,
+  checkoutFeedbackClass,
+  checkoutFeedbackVariant,
+  transactionId,
+}: VotingPayPalPanelProps) {
+  const [{ isPending, isRejected, isResolved }] = usePayPalScriptReducer();
+  const [{ loadingStatusErrorMessage }] = useScriptProviderContext();
+  const showButtons = isResolved && !isRejected;
+
+  return (
+    <div className='space-y-4'>
+      <div>
+        <p className='text-sm font-medium text-muted-foreground'>Amount due</p>
+        <div className='mt-1 text-3xl font-semibold'>{amountLabel ?? '--'}</div>
+      </div>
+      <div className='space-y-2 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground'>
+        <div className='flex items-start gap-2'>
+          <Info className='h-4 w-4 shrink-0 text-primary' />
+          <p>
+            Your contribution helps the morale team fund upcoming
+            events, supplies, and recognition moments.
+          </p>
+        </div>
+        <div className='flex items-start gap-2'>
+          <CheckCircle2 className='h-4 w-4 shrink-0 text-primary' />
+          <p>
+            PayPal sends you a receipt immediately after we capture the payment.
+          </p>
+        </div>
+      </div>
+      <div className='space-y-5'>
+        {isRejected && (
+          <div className='rounded-xl border border-destructive/60 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
+            PayPal failed to load. Disable blockers and confirm your
+            client ID is valid.
+            {loadingStatusErrorMessage
+              ? ` (${loadingStatusErrorMessage})`
+              : ''}
+          </div>
+        )}
+        {isPending && !isRejected && (
+          <p className='text-xs text-muted-foreground'>
+            Loading PayPal checkout...
+          </p>
+        )}
+        {showButtons &&
+          paymentButtons.map(({ id, fundingSource, helper }) => (
+            <div key={id} className='space-y-1'>
+              <PayPalButtons
+                {...paypalButtonsProps}
+                fundingSource={fundingSource}
+                style={{
+                  ...(paypalButtonsProps.style ?? {}),
+                  ...(FUNDING_STYLE_OVERRIDES[fundingSource] ?? {}),
+                }}
+              />
+              {helper && (
+                <p className='text-[11px] text-muted-foreground'>{helper}</p>
+              )}
+            </div>
+          ))}
+      </div>
+      {checkoutFeedbackMessage && (
+        <div className={`rounded-xl border px-4 py-3 text-sm ${checkoutFeedbackClass}`}>
+          {checkoutFeedbackMessage}
+          {transactionId && checkoutFeedbackVariant === 'success' && (
+            <p className='mt-2 text-xs font-mono'>Reference: {transactionId}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function LeaderboardSectionCard({ section }: LeaderboardSectionCardProps) {
   return (
