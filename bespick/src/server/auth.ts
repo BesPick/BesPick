@@ -32,9 +32,9 @@ export function isAllowedEmail(email?: string | null) {
 export function getPrimaryEmail(user?: ClerkUserLike | null) {
   if (!user?.emailAddresses || user.emailAddresses.length === 0) return null;
   const primaryId = user.primaryEmailAddressId ?? null;
-  const primary =
-    primaryId &&
-    user.emailAddresses.find((address) => address.id === primaryId);
+  const primary = primaryId
+    ? user.emailAddresses.find((address) => address.id === primaryId)
+    : undefined;
   const email =
     primary?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? null;
   return email?.trim() ?? null;
