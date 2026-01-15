@@ -187,7 +187,7 @@ export default function DashboardPage() {
               Welcome to the Morale Dashboard!
             </h1>
             <p className='mt-4 text-base text-muted-foreground sm:text-lg'>
-              Stay connected with upcoming morale events and stay up to date with the latest announcements. Browse the latest activities below.
+              Stay connected with upcoming morale events and up to date with the latest announcements. Browse the latest notifications below.
             </p>
           </div>
         ) : (

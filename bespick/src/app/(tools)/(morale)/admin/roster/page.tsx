@@ -86,8 +86,7 @@ export default async function AdminRosterPage({
           Admin Dashboard
         </h1>
         <p className='mt-2 text-sm text-muted-foreground'>
-          Manage user roles and assignments. Only members with the admin role
-          can access this view.
+          Manage user roles and assignments and other information.
         </p>
       </header>
 

@@ -28,7 +28,7 @@ const FUNDING_TIERS: FundingTier[] = [
     id: '1',
     title: 'Micro Boost',
     description: 'Cover snack and drink restock for a day.',
-    amount: 25,
+    amount: 15,
   },
   {
     id: '2',
@@ -40,7 +40,7 @@ const FUNDING_TIERS: FundingTier[] = [
     id: '3',
     title: 'Big Spender',
     description: 'Go above and beyond to support BESPIN Morale.',
-    amount: 150,
+    amount: 100,
   },
 ];
 
@@ -52,7 +52,7 @@ const PAYMENT_METHOD_BUTTONS: FundingButtonConfig[] = [
   {
     id: 'venmo',
     fundingSource: 'venmo',
-    helper: 'Shows on US mobile browsers when paying in USD.',
+    helper: 'Venmo is only available for USD contributions.',
   },
   {
     id: 'card',
