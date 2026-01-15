@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 APP_VERSION="$(node -p "require('./package.json').version")"
 GIT_SHA="$(git rev-parse --short HEAD)"
 UPLOADS_DIR="${ROOT_DIR}/public/uploads"
+STANDALONE_DIR="${ROOT_DIR}/.next/standalone"
 OVERRIDE_DIR="/etc/systemd/system/holocron.service.d"
 OVERRIDE_FILE="${OVERRIDE_DIR}/override.conf"
 
@@ -27,6 +28,14 @@ export UPLOADS_DIR="${UPLOADS_DIR}"
 
 echo "Building app in $ROOT_DIR"
 npm run build
+
+if [ -d "$STANDALONE_DIR" ]; then
+  echo "Preparing standalone output"
+  rm -rf "$STANDALONE_DIR/.next" "$STANDALONE_DIR/public"
+  mkdir -p "$STANDALONE_DIR/.next"
+  cp -R "$ROOT_DIR/.next/static" "$STANDALONE_DIR/.next/static"
+  cp -R "$ROOT_DIR/public" "$STANDALONE_DIR/public"
+fi
 
 echo "Restarting holocron service"
 sudo systemctl restart holocron

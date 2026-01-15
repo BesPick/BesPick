@@ -363,6 +363,10 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
+This project uses Next.js standalone output, so `npm start` runs the
+`.next/standalone/server.js` build (the deploy script copies `public`
+and `.next/static` into the standalone folder).
+
 Enable and start:
 
 ```bash

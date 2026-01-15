@@ -127,6 +127,10 @@ sudo systemctl daemon-reload
 sudo systemctl enable holocron
 ```
 
+Note: this project uses Next.js standalone output, so `npm start` runs the
+`.next/standalone/server.js` build (the deploy script copies `public`
+and `.next/static` into the standalone folder).
+
 ---
 
 ## 7) Make the deploy command work

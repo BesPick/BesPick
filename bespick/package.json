@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "node .next/standalone/server.js",
     "test": "vitest run",
     "lint": "eslint",
     "release:patch": "npm version patch --no-git-tag-version",
