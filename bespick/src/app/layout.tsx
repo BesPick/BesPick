@@ -6,6 +6,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { HeaderActions } from '@/components/header/header-actions';
 import './globals.css';
 import { shadcn } from '@clerk/themes';
+import packageJson from '../../package.json';
 
 export const metadata = {
   title: 'BESPIN Holocron',
@@ -21,6 +22,13 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 });
+
+const appVersion =
+  process.env.NEXT_PUBLIC_APP_VERSION ?? packageJson.version;
+const appCommit = process.env.NEXT_PUBLIC_GIT_SHA;
+const appBuildLabel = appCommit
+  ? `${appVersion} (${appCommit.slice(0, 7)})`
+  : appVersion;
 
 export default function RootLayout({
   children,
@@ -97,6 +105,12 @@ export default function RootLayout({
             </header>
             {/* Main content */}
             <main className='flex-1 pt-16'>{children}</main>
+            <footer className='border-t border-border bg-card/60'>
+              <div className='mx-auto flex w-full max-w-8xl flex-col items-center justify-between gap-1 px-5 py-3 text-xs text-muted-foreground sm:flex-row'>
+                <span>BESPIN Holocron</span>
+                <span>Version {appBuildLabel}</span>
+              </div>
+            </footer>
           </div>
         </body>
       </html>

@@ -1,6 +1,6 @@
 {
   "name": "bespick",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "engines": {
     "node": "20.11.1"
@@ -10,7 +10,11 @@
     "build": "next build --webpack",
     "start": "next start",
     "test": "vitest run",
-    "lint": "eslint"
+    "lint": "eslint",
+    "release:patch": "npm version patch --no-git-tag-version",
+    "release:minor": "npm version minor --no-git-tag-version",
+    "release:major": "npm version major --no-git-tag-version",
+    "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "@clerk/nextjs": "6.36.7",

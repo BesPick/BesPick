@@ -170,6 +170,24 @@ bespick/
 - **Node version**: Use Node 20.11.1 in production to avoid native module mismatches with `better-sqlite3`.
 - **Automation**: In production, keep the dashboard (or a scheduled job) calling `announcements.publishDue` so scheduled posts, auto-deletes, and auto-archives stay accurate. A simple approach is to configure a Vercel Cron task that hits a lightweight API route invoking the mutation at a fixed cadence.
 
+### Versioning & Release Workflow
+
+1. Update `CHANGELOG.md` by moving items from **[Unreleased]** into a new version section.
+2. Bump the version:
+   - `npm run release:patch` (or `release:minor` / `release:major`)
+3. Commit and push.
+4. On the server, pull + rebuild + restart:
+
+```bash
+cd /home/ubuntu/holocron/bespick
+git pull
+npm run deploy
+```
+
+`npm run deploy` updates the systemd env with the current `package.json` version
+and git SHA, rebuilds the app, and restarts the service so the footer shows the
+exact build.
+
 ### AWS EC2 Deployment (Holocron)
 
 This setup runs the app on an Ubuntu EC2 instance with systemd and Nginx.

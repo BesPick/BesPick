@@ -644,17 +644,8 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
     <div className='fixed inset-0 z-50 overflow-y-auto bg-black/60 px-3 py-4 sm:px-4 sm:py-6'>
       <div className='mx-auto flex min-h-full items-start justify-center sm:items-center'>
         <div className='w-full max-w-6xl rounded-2xl border border-border bg-card p-4 shadow-2xl sm:p-6 lg:max-h-[95vh] lg:overflow-hidden'>
-          <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-            <div className='order-2 lg:order-1'>
-              <LeaderboardPanel
-                sections={leaderboardSections}
-                participantsCount={leaderboardParticipants.length}
-                mode={leaderboardMode}
-                activeSection={activeLeaderboardSection}
-                onSelectSection={setActiveLeaderboardId}
-              />
-            </div>
-            <div className='order-1 flex min-w-0 flex-col gap-6 lg:order-2 lg:max-h-[80vh] lg:overflow-y-auto lg:pr-2'>
+          <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[auto_1fr]'>
+            <div className='min-w-0 lg:col-start-2 lg:row-start-1'>
               <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4'>
                 <div>
                   <p className='text-xs font-semibold uppercase tracking-wide text-primary'>
@@ -684,172 +675,186 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
                   {eventDescription}
                 </p>
               )}
+            </div>
 
-              <div className='mt-6 rounded-xl border border-border bg-background/60 p-4'>
-                <div className='flex flex-wrap items-center gap-4 text-sm text-muted-foreground'>
-                  <span>
-                    Add vote price:{' '}
-                    <span className='font-semibold text-foreground'>
-                      ${addPrice.toFixed(2)}
-                    </span>
-                  </span>
-                  {allowRemovals && (
+            <div className='min-w-0 lg:col-start-1 lg:row-start-1 lg:row-span-2'>
+              <LeaderboardPanel
+                sections={leaderboardSections}
+                participantsCount={leaderboardParticipants.length}
+                mode={leaderboardMode}
+                activeSection={activeLeaderboardSection}
+                onSelectSection={setActiveLeaderboardId}
+              />
+            </div>
+
+            <div className='min-w-0 lg:col-start-2 lg:row-start-2'>
+              <div className='flex min-w-0 flex-col gap-6 lg:max-h-[80vh] lg:overflow-y-auto lg:pr-2'>
+                <div className='rounded-xl border border-border bg-background/60 p-4'>
+                  <div className='flex flex-wrap items-center gap-4 text-sm text-muted-foreground'>
                     <span>
-                      Remove vote price:{' '}
+                      Add vote price:{' '}
                       <span className='font-semibold text-foreground'>
-                        ${removePrice.toFixed(2)}
+                        ${addPrice.toFixed(2)}
                       </span>
                     </span>
-                  )}
-                </div>
-                <p className='mt-2 text-xs text-muted-foreground'>
-                  Enter how many votes to add{allowRemovals ? ' or remove' : ''}, then submit your purchase to update totals.
-                </p>
-              </div>
-
-              <div className='mt-6 flex flex-col gap-3'>
-                <div className='relative'>
-                  <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
-                  <input
-                    type='search'
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder='Search participants by name...'
-                    className='w-full rounded-lg border border-border bg-background py-2 pl-10 pr-3 text-sm text-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-                  />
-                </div>
-
-                <div className='max-h-[50vh] overflow-y-auto rounded-xl border border-dashed border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:max-h-[40vh]'>
-                  {participants.length === 0 ? (
-                    <p className='p-6 text-sm text-muted-foreground'>
-                      No participants available for this event.
-                    </p>
-                  ) : filteredParticipants.length === 0 ? (
-                    <p className='p-6 text-sm text-muted-foreground'>
-                      No participants match your search.
-                    </p>
-                  ) : (
-                    <ul>
-                      {filteredParticipants.map((participant) => {
-                        const userId = participant.userId;
-                        const addCount = selections[userId]?.add ?? 0;
-                        const removeCount = selections[userId]?.remove ?? 0;
-                        const currentVotes = Math.max(0, participant.votes ?? 0);
-                        const fullName = getParticipantName(participant);
-                        return (
-                          <li
-                            key={userId}
-                            className='flex flex-col gap-4 border-b border-border/60 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between'
-                          >
-                            <div className='space-y-1'>
-                              <p className='font-medium text-foreground'>{fullName}</p>
-                              <p className='text-xs text-muted-foreground'>
-                                Current votes: {currentVotes}
-                              </p>
-                            </div>
-                            <div className='flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end'>
-                              {allowRemovals && (
-                                <VoteAdjuster
-                                  label='Remove'
-                                  count={removeCount}
-                                  price={removePrice}
-                                  onSetCount={(value) =>
-                                    setSelectionValue(userId, 'remove', value, currentVotes)
-                                  }
-                                  max={currentVotes}
-                                />
-                              )}
-                              <VoteAdjuster
-                                label='Add'
-                                count={addCount}
-                                price={addPrice}
-                                onSetCount={(value) =>
-                                  setSelectionValue(userId, 'add', value)
-                                }
-                              />
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              </div>
-
-              <div className='mt-6 space-y-3 rounded-xl border border-border bg-background/70 p-4'>
-                <SummaryRow label={`Add votes (${totals.add})`} value={totals.addCost} />
-                {allowRemovals && (
-                  <SummaryRow label={`Remove votes (${totals.remove})`} value={totals.removeCost} />
-                )}
-                <div className='flex items-center justify-between border-t border-border pt-3 text-lg font-semibold text-foreground'>
-                  <span>Total price</span>
-                  <span>${totals.totalPrice.toFixed(2)}</span>
-                </div>
-              </div>
-
-            <div className='mt-4 rounded-2xl border border-border bg-background/80 p-5 shadow-inner'>
-              {!paypalClientId ? (
-                <div className='flex flex-col items-center gap-3 text-center text-sm text-muted-foreground'>
-                  <ShieldAlert className='h-6 w-6 text-destructive' />
-                  <p>
-                    PayPal is not configured. Set{' '}
-                    <code className='rounded bg-muted px-1 py-0.5 text-[0.8em]'>
-                      NEXT_PUBLIC_PAYPAL_CLIENT_ID
-                    </code>{' '}
-                    and related env vars to enable checkout.
-                  </p>
-                </div>
-              ) : (
-                <PayPalScriptProvider deferLoading={false} options={paypalOptions}>
-                  <div className='space-y-4'>
-                    <div>
-                      <p className='text-sm font-medium text-muted-foreground'>Amount due</p>
-                      <div className='mt-1 text-3xl font-semibold'>{amountLabel ?? '--'}</div>
-                    </div>
-                    <div className='space-y-2 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground'>
-                      <div className='flex items-start gap-2'>
-                        <Info className='h-4 w-4 shrink-0 text-primary' />
-                        <p>
-                          Your contribution helps the morale team fund upcoming
-                          events, supplies, and recognition moments.
-                        </p>
-                      </div>
-                      <div className='flex items-start gap-2'>
-                        <CheckCircle2 className='h-4 w-4 shrink-0 text-primary' />
-                        <p>
-                          PayPal sends you a receipt immediately after we capture the payment.
-                        </p>
-                      </div>
-                    </div>
-                    <div className='space-y-5'>
-                      {paymentButtons.map(({ id, fundingSource, helper }) => (
-                        <div key={id} className='space-y-1'>
-                          <PayPalButtons
-                            {...paypalButtonsProps}
-                            fundingSource={fundingSource}
-                            style={{
-                              ...(paypalButtonsProps.style ?? {}),
-                              ...(FUNDING_STYLE_OVERRIDES[fundingSource] ?? {}),
-                            }}
-                          />
-                          {helper && (
-                            <p className='text-[11px] text-muted-foreground'>{helper}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {checkoutFeedbackMessage && (
-                      <div className={`rounded-xl border px-4 py-3 text-sm ${checkoutFeedbackClass}`}>
-                        {checkoutFeedbackMessage}
-                        {transactionId && checkoutFeedbackVariant === 'success' && (
-                          <p className='mt-2 text-xs font-mono'>Reference: {transactionId}</p>
-                        )}
-                      </div>
+                    {allowRemovals && (
+                      <span>
+                        Remove vote price:{' '}
+                        <span className='font-semibold text-foreground'>
+                          ${removePrice.toFixed(2)}
+                        </span>
+                      </span>
                     )}
                   </div>
-                </PayPalScriptProvider>
-              )}
-            </div>
+                  <p className='mt-2 text-xs text-muted-foreground'>
+                    Enter how many votes to add{allowRemovals ? ' or remove' : ''}, then submit your purchase to update totals.
+                  </p>
+                </div>
+
+                <div className='flex flex-col gap-3'>
+                  <div className='relative'>
+                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
+                    <input
+                      type='search'
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder='Search participants by name...'
+                      className='w-full rounded-lg border border-border bg-background py-2 pl-10 pr-3 text-sm text-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+                    />
+                  </div>
+
+                  <div className='max-h-[50vh] overflow-y-auto rounded-xl border border-dashed border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:max-h-[40vh]'>
+                    {participants.length === 0 ? (
+                      <p className='p-6 text-sm text-muted-foreground'>
+                        No participants available for this event.
+                      </p>
+                    ) : filteredParticipants.length === 0 ? (
+                      <p className='p-6 text-sm text-muted-foreground'>
+                        No participants match your search.
+                      </p>
+                    ) : (
+                      <ul>
+                        {filteredParticipants.map((participant) => {
+                          const userId = participant.userId;
+                          const addCount = selections[userId]?.add ?? 0;
+                          const removeCount = selections[userId]?.remove ?? 0;
+                          const currentVotes = Math.max(0, participant.votes ?? 0);
+                          const fullName = getParticipantName(participant);
+                          return (
+                            <li
+                              key={userId}
+                              className='flex flex-col gap-4 border-b border-border/60 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between'
+                            >
+                              <div className='space-y-1'>
+                                <p className='font-medium text-foreground'>{fullName}</p>
+                                <p className='text-xs text-muted-foreground'>
+                                  Current votes: {currentVotes}
+                                </p>
+                              </div>
+                              <div className='flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end'>
+                                {allowRemovals && (
+                                  <VoteAdjuster
+                                    label='Remove'
+                                    count={removeCount}
+                                    price={removePrice}
+                                    onSetCount={(value) =>
+                                      setSelectionValue(userId, 'remove', value, currentVotes)
+                                    }
+                                    max={currentVotes}
+                                  />
+                                )}
+                                <VoteAdjuster
+                                  label='Add'
+                                  count={addCount}
+                                  price={addPrice}
+                                  onSetCount={(value) =>
+                                    setSelectionValue(userId, 'add', value)
+                                  }
+                                />
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+
+                <div className='space-y-3 rounded-xl border border-border bg-background/70 p-4'>
+                  <SummaryRow label={`Add votes (${totals.add})`} value={totals.addCost} />
+                  {allowRemovals && (
+                    <SummaryRow label={`Remove votes (${totals.remove})`} value={totals.removeCost} />
+                  )}
+                  <div className='flex items-center justify-between border-t border-border pt-3 text-lg font-semibold text-foreground'>
+                    <span>Total price</span>
+                    <span>${totals.totalPrice.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className='rounded-2xl border border-border bg-background/80 p-5 shadow-inner'>
+                  {!paypalClientId ? (
+                    <div className='flex flex-col items-center gap-3 text-center text-sm text-muted-foreground'>
+                      <ShieldAlert className='h-6 w-6 text-destructive' />
+                      <p>
+                        PayPal is not configured. Set{' '}
+                        <code className='rounded bg-muted px-1 py-0.5 text-[0.8em]'>
+                          NEXT_PUBLIC_PAYPAL_CLIENT_ID
+                        </code>{' '}
+                        and related env vars to enable checkout.
+                      </p>
+                    </div>
+                  ) : (
+                    <PayPalScriptProvider deferLoading={false} options={paypalOptions}>
+                      <div className='space-y-4'>
+                        <div>
+                          <p className='text-sm font-medium text-muted-foreground'>Amount due</p>
+                          <div className='mt-1 text-3xl font-semibold'>{amountLabel ?? '--'}</div>
+                        </div>
+                        <div className='space-y-2 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground'>
+                          <div className='flex items-start gap-2'>
+                            <Info className='h-4 w-4 shrink-0 text-primary' />
+                            <p>
+                              Your contribution helps the morale team fund upcoming
+                              events, supplies, and recognition moments.
+                            </p>
+                          </div>
+                          <div className='flex items-start gap-2'>
+                            <CheckCircle2 className='h-4 w-4 shrink-0 text-primary' />
+                            <p>
+                              PayPal sends you a receipt immediately after we capture the payment.
+                            </p>
+                          </div>
+                        </div>
+                        <div className='space-y-5'>
+                          {paymentButtons.map(({ id, fundingSource, helper }) => (
+                            <div key={id} className='space-y-1'>
+                              <PayPalButtons
+                                {...paypalButtonsProps}
+                                fundingSource={fundingSource}
+                                style={{
+                                  ...(paypalButtonsProps.style ?? {}),
+                                  ...(FUNDING_STYLE_OVERRIDES[fundingSource] ?? {}),
+                                }}
+                              />
+                              {helper && (
+                                <p className='text-[11px] text-muted-foreground'>{helper}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {checkoutFeedbackMessage && (
+                          <div className={`rounded-xl border px-4 py-3 text-sm ${checkoutFeedbackClass}`}>
+                            {checkoutFeedbackMessage}
+                            {transactionId && checkoutFeedbackVariant === 'success' && (
+                              <p className='mt-2 text-xs font-mono'>Reference: {transactionId}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </PayPalScriptProvider>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
