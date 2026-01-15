@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   PayPalButtons,
   PayPalScriptProvider,
@@ -88,6 +88,25 @@ function clampAmount(input: number) {
   return Math.min(input, 10_000);
 }
 
+function getEligibleFundingSources(buttons: FundingButtonConfig[]) {
+  const paypal = (window as typeof window & { paypal?: any }).paypal;
+  if (!paypal?.Buttons) return null;
+  const eligible = new Set<FundingButtonConfig['fundingSource']>();
+  for (const { fundingSource } of buttons) {
+    const source =
+      paypal.FUNDING?.[String(fundingSource).toUpperCase()] ?? fundingSource;
+    try {
+      const instance = paypal.Buttons({ fundingSource: source });
+      if (instance?.isEligible?.()) {
+        eligible.add(fundingSource);
+      }
+    } catch {
+      // Ignore eligibility failures and fall back to default rendering.
+    }
+  }
+  return eligible;
+}
+
 type PayPalButtonsPanelProps = {
   amountLabel: string | null;
   paymentButtons: FundingButtonConfig[];
@@ -107,6 +126,30 @@ function PayPalButtonsPanel({
 }: PayPalButtonsPanelProps) {
   const [{ isPending, isRejected, isResolved }] = usePayPalScriptReducer();
   const showButtons = isResolved && !isRejected;
+  const [eligibleFunding, setEligibleFunding] = useState<
+    Set<FundingButtonConfig['fundingSource']> | null
+  >(null);
+
+  useEffect(() => {
+    if (!showButtons) {
+      setEligibleFunding(null);
+      return;
+    }
+    setEligibleFunding(getEligibleFundingSources(paymentButtons));
+  }, [paymentButtons, showButtons]);
+
+  const visibleButtons = useMemo(() => {
+    if (!showButtons) return [];
+    if (!eligibleFunding) {
+      return paymentButtons.filter((button) => button.fundingSource !== 'venmo');
+    }
+    const filtered = paymentButtons.filter((button) =>
+      eligibleFunding.has(button.fundingSource),
+    );
+    return filtered.length
+      ? filtered
+      : paymentButtons.filter((button) => button.fundingSource !== 'venmo');
+  }, [eligibleFunding, paymentButtons, showButtons]);
 
   return (
     <div className='space-y-4'>
@@ -147,7 +190,7 @@ function PayPalButtonsPanel({
           </p>
         )}
         {showButtons &&
-          paymentButtons.map(({ id, fundingSource, helper }) => (
+          visibleButtons.map(({ id, fundingSource, helper }) => (
             <div key={id} className='space-y-1'>
               {/** PayPal restricts styling by funding source, so merge safe overrides */}
               <PayPalButtons
