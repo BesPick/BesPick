@@ -26,6 +26,7 @@ BESPIN Holocron is BESPIN's internal operations suite: a single Next.js app that
 - [Directory Layout](#directory-layout)
 - [Authentication & Roles](#authentication--roles)
 - [Deployment Notes](#deployment-notes)
+  - [Source Control & Live Updates](#source-control--live-updates)
   - [Versioning & Release Workflow](#versioning--release-workflow)
   - [AWS EC2 Deployment (Holocron)](#aws-ec2-deployment-holocron)
     - [Instance setup (EC2)](#instance-setup-ec2)
