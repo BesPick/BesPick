@@ -31,6 +31,7 @@ export UPLOADS_DIR="${UPLOADS_DIR}"
 if [ -n "${PORT}" ]; then
   export PORT="${PORT}"
 fi
+mkdir -p "$UPLOADS_DIR"
 
 echo "Building app in $ROOT_DIR"
 npm run build
@@ -41,6 +42,8 @@ if [ -d "$STANDALONE_DIR" ]; then
   mkdir -p "$STANDALONE_DIR/.next"
   cp -R "$ROOT_DIR/.next/static" "$STANDALONE_DIR/.next/static"
   cp -R "$ROOT_DIR/public" "$STANDALONE_DIR/public"
+  rm -rf "$STANDALONE_DIR/public/uploads"
+  ln -s "$UPLOADS_DIR" "$STANDALONE_DIR/public/uploads"
 fi
 
 echo "Restarting ${SERVICE_NAME} service"
