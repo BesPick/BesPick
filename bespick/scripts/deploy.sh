@@ -31,7 +31,7 @@ npm run build
 
 if [ -d "$STANDALONE_DIR" ]; then
   echo "Preparing standalone output"
-  rm -rf "$STANDALONE_DIR/.next" "$STANDALONE_DIR/public"
+  rm -rf "$STANDALONE_DIR/.next/static" "$STANDALONE_DIR/public"
   mkdir -p "$STANDALONE_DIR/.next"
   cp -R "$ROOT_DIR/.next/static" "$STANDALONE_DIR/.next/static"
   cp -R "$ROOT_DIR/public" "$STANDALONE_DIR/public"
