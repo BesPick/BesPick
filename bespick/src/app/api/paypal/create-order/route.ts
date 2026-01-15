@@ -10,6 +10,7 @@ type CreateOrderPayload = {
 };
 
 const MAX_FIELD_LENGTH = 120;
+const MAX_ERROR_LENGTH = 240;
 
 function sanitizeField(value: unknown) {
   if (typeof value !== 'string') return undefined;
@@ -68,8 +69,12 @@ export async function POST(request: Request) {
     return NextResponse.json(order);
   } catch (error) {
     console.error('Failed to create PayPal order', error);
+    const message =
+      error instanceof Error
+        ? error.message.slice(0, MAX_ERROR_LENGTH)
+        : 'Unable to create payment right now.';
     return NextResponse.json(
-      { error: 'Unable to create payment right now.' },
+      { error: message },
       { status: 500 },
     );
   }

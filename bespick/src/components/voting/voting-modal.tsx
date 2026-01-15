@@ -99,6 +99,7 @@ const PAYMENT_METHOD_BUTTONS: FundingButtonConfig[] = [
   {
     id: 'venmo',
     fundingSource: 'venmo',
+    helper: 'Shows on US mobile browsers when paying in USD.',
   },
   {
     id: 'card',
@@ -144,6 +145,21 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
   const paypalCurrency =
     process.env.NEXT_PUBLIC_PAYPAL_CURRENCY?.toUpperCase() ?? 'USD';
+  const paypalBuyerCountry =
+    process.env.NEXT_PUBLIC_PAYPAL_BUYER_COUNTRY?.toUpperCase() ?? undefined;
+  const enableVenmo = paypalCurrency === 'USD';
+  const enabledFunding = React.useMemo(() => {
+    const sources = ['card'];
+    if (enableVenmo) sources.unshift('venmo');
+    return sources.join(',');
+  }, [enableVenmo]);
+  const paymentButtons = React.useMemo(
+    () =>
+      PAYMENT_METHOD_BUTTONS.filter((button) =>
+        button.fundingSource === 'venmo' ? enableVenmo : true,
+      ),
+    [enableVenmo],
+  );
 
   const normalizeParticipants = React.useCallback(() => {
     return (currentEvent.votingParticipants ?? []).map((participant) => ({
@@ -365,10 +381,11 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
       clientId: paypalClientId ?? '',
       currency: paypalCurrency,
       intent: 'capture',
-      enableFunding: ['venmo', 'card'],
+      enableFunding: enabledFunding,
       components: 'buttons',
+      ...(paypalBuyerCountry ? { buyerCountry: paypalBuyerCountry } : {}),
     }),
-    [paypalClientId, paypalCurrency],
+    [enabledFunding, paypalBuyerCountry, paypalClientId, paypalCurrency],
   );
   const normalizedSearch = search.trim().toLowerCase();
   const filteredParticipants = React.useMemo(() => {
@@ -480,6 +497,7 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
       forceReRender: [
         paypalClientId ?? '',
         paypalCurrency,
+        enabledFunding,
         hasCart ? 'cart' : 'empty',
         totalAmount,
       ],
@@ -590,6 +608,7 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
     hasCart,
     paypalClientId,
     paypalCurrency,
+    enabledFunding,
     totalAmount,
     buildAdjustments,
     currentEvent.title,
@@ -803,7 +822,7 @@ export function VotingModal({ event, onClose }: VotingModalProps) {
                       </div>
                     </div>
                     <div className='space-y-5'>
-                      {PAYMENT_METHOD_BUTTONS.map(({ id, fundingSource, helper }) => (
+                      {paymentButtons.map(({ id, fundingSource, helper }) => (
                         <div key={id} className='space-y-1'>
                           <PayPalButtons
                             {...paypalButtonsProps}

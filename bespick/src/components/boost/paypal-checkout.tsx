@@ -51,7 +51,7 @@ const PAYMENT_METHOD_BUTTONS: FundingButtonConfig[] = [
   {
     id: 'venmo',
     fundingSource: 'venmo',
-    helper: 'Requires a Venmo account linked to PayPal.',
+    helper: 'Shows on US mobile browsers when paying in USD.',
   },
   {
     id: 'card',
@@ -91,7 +91,22 @@ export function PayPalCheckout() {
   const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
   const currency =
     process.env.NEXT_PUBLIC_PAYPAL_CURRENCY?.toUpperCase() ?? 'USD';
+  const buyerCountry =
+    process.env.NEXT_PUBLIC_PAYPAL_BUYER_COUNTRY?.toUpperCase() ?? undefined;
   const formatter = useMemo(() => currencyFormatter(currency), [currency]);
+  const enableVenmo = currency === 'USD';
+  const enabledFunding = useMemo(() => {
+    const sources = ['card'];
+    if (enableVenmo) sources.unshift('venmo');
+    return sources.join(',');
+  }, [enableVenmo]);
+  const paymentButtons = useMemo(
+    () =>
+      PAYMENT_METHOD_BUTTONS.filter((button) =>
+        button.fundingSource === 'venmo' ? enableVenmo : true,
+      ),
+    [enableVenmo],
+  );
 
   const [selectedTier, setSelectedTier] = useState<string>(
     FUNDING_TIERS[1]?.id ?? 'custom',
@@ -118,9 +133,10 @@ export function PayPalCheckout() {
       currency,
       intent: 'capture',
       components: 'buttons',
-      enableFunding: ['venmo', 'card'],
+      enableFunding: enabledFunding,
+      ...(buyerCountry ? { buyerCountry } : {}),
     }),
-    [clientId, currency],
+    [buyerCountry, clientId, currency, enabledFunding],
   );
 
   const disabled = !clientId;
@@ -153,6 +169,7 @@ export function PayPalCheckout() {
     forceReRender: [
       clientId ?? '',
       currency,
+      enabledFunding,
       isValidAmount ? 'valid' : 'invalid',
       Number.isFinite(numericAmount) ? numericAmount : 0,
     ],
@@ -182,11 +199,11 @@ export function PayPalCheckout() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        setStatus('error');
-        setStatusMessage(
+        const message =
           (error as { error?: string }).error ??
-            'Could not start PayPal checkout. Please try again.',
-        );
+          'Could not start PayPal checkout. Please try again.';
+        setStatus('error');
+        setStatusMessage(message);
         throw new Error('Failed to create order');
       }
 
@@ -215,11 +232,11 @@ export function PayPalCheckout() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        setStatus('error');
-        setStatusMessage(
+        const message =
           (error as { error?: string }).error ??
-            'We could not capture the payment. PayPal may have voided the transaction.',
-        );
+          'We could not capture the payment. PayPal may have voided the transaction.';
+        setStatus('error');
+        setStatusMessage(message);
         return;
       }
 
@@ -369,7 +386,7 @@ export function PayPalCheckout() {
                   </div>
                 </div>
                 <div className='space-y-5'>
-                  {PAYMENT_METHOD_BUTTONS.map(({ id, fundingSource, helper }) => (
+                  {paymentButtons.map(({ id, fundingSource, helper }) => (
                     <div key={id} className='space-y-1'>
                       {/** PayPal restricts styling by funding source, so merge safe overrides */}
                       <PayPalButtons

@@ -29,8 +29,12 @@ export async function POST(request: Request) {
     return NextResponse.json(capture);
   } catch (error) {
     console.error('Failed to capture PayPal order', error);
+    const message =
+      error instanceof Error
+        ? error.message.slice(0, 240)
+        : 'Unable to capture payment right now.';
     return NextResponse.json(
-      { error: 'Unable to capture payment right now.' },
+      { error: message },
       { status: 500 },
     );
   }
