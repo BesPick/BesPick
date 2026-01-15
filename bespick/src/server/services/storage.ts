@@ -10,6 +10,10 @@ export const uploadsDir = path.resolve(
   process.env.UPLOADS_DIR ?? path.join(process.cwd(), 'public', 'uploads'),
 );
 fs.mkdirSync(uploadsDir, { recursive: true });
+const runtimeUploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
+const uploadSearchDirs = Array.from(
+  new Set([uploadsDir, runtimeUploadsDir]),
+);
 
 const ALLOWED_IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -66,9 +70,12 @@ export async function getImageUrls(
 ): Promise<StorageImage[]> {
   const urls: StorageImage[] = [];
   for (const id of ids) {
-    const filePath = path.join(uploadsDir, id);
-    if (fs.existsSync(filePath)) {
-      urls.push({ id, url: `/uploads/${id}` });
+    for (const dir of uploadSearchDirs) {
+      const filePath = path.join(dir, id);
+      if (fs.existsSync(filePath)) {
+        urls.push({ id, url: `/uploads/${id}` });
+        break;
+      }
     }
   }
   return urls;
@@ -79,12 +86,16 @@ export async function deleteUploads(ids: Id<'_storage'>[]) {
   await db.delete(uploads).where(inArray(uploads.id, ids as string[]));
   await Promise.all(
     ids.map(async (id) => {
-      const filePath = path.join(uploadsDir, id);
-      try {
-        await fs.promises.unlink(filePath);
-      } catch {
-        // ignore missing files
-      }
+      await Promise.all(
+        uploadSearchDirs.map(async (dir) => {
+          const filePath = path.join(dir, id);
+          try {
+            await fs.promises.unlink(filePath);
+          } catch {
+            // ignore missing files
+          }
+        }),
+      );
     }),
   );
 }
