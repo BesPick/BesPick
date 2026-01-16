@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import {
   clearScheduleEventOverride,
@@ -65,6 +65,8 @@ type EventOverride = {
   time: string | null;
   isCanceled: boolean;
   movedToDate?: string | null;
+  overrideUserId?: string | null;
+  overrideUserName?: string | null;
 };
 
 const overrideKey = (dateValue: string, eventType: HostHubEventType) =>
@@ -77,6 +79,15 @@ const resolveEventTime = (
   if (overrideTime && overrideTime.trim()) return overrideTime;
   if (defaultTime && defaultTime.trim()) return defaultTime;
   return 'TBD';
+};
+
+const resolveAssignee = (
+  assignment: { userId: string | null; userName: string } | undefined,
+  override: EventOverride | undefined,
+) => {
+  const name = override?.overrideUserName ?? assignment?.userName ?? 'TBD';
+  const id = override?.overrideUserId ?? assignment?.userId ?? null;
+  return { name, id };
 };
 
 const addMonths = (date: Date, offset: number) =>
@@ -135,13 +146,14 @@ const getEventsForDate = (
     const key = dateKey(date);
     const standupAssignment = standupAssignments[key];
     const override = eventOverrides[overrideKey(key, 'standup')];
+    const assignee = resolveAssignee(standupAssignment, override);
     events.push({
       id: `standup-${key}`,
       dateKey: key,
       label: 'Standup',
       time: resolveEventTime(override?.time, standupDefaultTime),
-      assignee: standupAssignment?.userName ?? 'TBD',
-      assigneeId: standupAssignment?.userId ?? null,
+      assignee: assignee.name,
+      assigneeId: assignee.id,
       variant: 'standup',
       isCanceled: override?.isCanceled ?? false,
     });
@@ -151,6 +163,7 @@ const getEventsForDate = (
   if (movedDemoEntries) {
     movedDemoEntries.forEach((movedDemo) => {
       const assignment = demoAssignments[movedDemo.sourceDate];
+      const assignee = resolveAssignee(assignment, movedDemo.override);
       const movedFromDate = parseDateKey(movedDemo.sourceDate);
       const detail =
         movedFromDate && movedDemo.sourceDate !== key
@@ -161,8 +174,8 @@ const getEventsForDate = (
         dateKey: movedDemo.sourceDate,
         label: 'Demo Day',
         time: resolveEventTime(movedDemo.override?.time, demoDefaultTime),
-        assignee: assignment?.userName ?? 'TBD',
-        assigneeId: assignment?.userId ?? null,
+        assignee: assignee.name,
+        assigneeId: assignee.id,
         detail,
         variant: 'demo',
         isCanceled: movedDemo.override?.isCanceled ?? false,
@@ -175,13 +188,14 @@ const getEventsForDate = (
     }
     const assignment = demoAssignments[key];
     const override = eventOverrides[overrideKey(key, 'demo')];
+    const assignee = resolveAssignee(assignment, override);
     events.push({
       id: `demo-${key}`,
       dateKey: key,
       label: 'Demo Day',
       time: resolveEventTime(override?.time, demoDefaultTime),
-      assignee: assignment?.userName ?? 'TBD',
-      assigneeId: assignment?.userId ?? null,
+      assignee: assignee.name,
+      assigneeId: assignee.id,
       variant: 'demo',
       isCanceled: override?.isCanceled ?? false,
     });
@@ -197,6 +211,8 @@ type HostHubCalendarProps = {
   demoDefaultTime: string;
   standupDefaultTime: string;
   eventOverrides: Record<string, EventOverride>;
+  refreshNotice?: { pendingSince: number; nextRefreshAt: number } | null;
+  roster: Array<{ userId: string; name: string }>;
 };
 
 export function HostHubCalendar({
@@ -207,6 +223,8 @@ export function HostHubCalendar({
   demoDefaultTime,
   standupDefaultTime,
   eventOverrides,
+  refreshNotice = null,
+  roster,
 }: HostHubCalendarProps) {
   const [baseDate] = useState(() => new Date());
   const [selectedIndex, setSelectedIndex] = useState(1);
@@ -220,9 +238,23 @@ export function HostHubCalendar({
   const [editTime, setEditTime] = useState('');
   const [editCanceled, setEditCanceled] = useState(false);
   const [editMovedDate, setEditMovedDate] = useState('');
+  const [editHostId, setEditHostId] = useState('');
   const [editMessage, setEditMessage] = useState<string | null>(null);
   const [isSaving, startTransition] = useTransition();
   const todayKey = useMemo(() => dateKey(new Date()), []);
+  const nextRefreshLabel = useMemo(() => {
+    if (!refreshNotice) return null;
+    return new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'long',
+    }).format(new Date(refreshNotice.nextRefreshAt));
+  }, [refreshNotice]);
+  const rosterOptions = useMemo(() => {
+    return [...roster].sort((a, b) => a.name.localeCompare(b.name));
+  }, [roster]);
+  const rosterMap = useMemo(
+    () => new Map(rosterOptions.map((entry) => [entry.userId, entry.name])),
+    [rosterOptions],
+  );
 
   const availableMonths = useMemo(
     () => MONTH_WINDOW.map((offset) => addMonths(baseDate, offset)),
@@ -313,6 +345,7 @@ export function HostHubCalendar({
   const closeModal = () => {
     setSelectedDate(null);
     setEditingEventId(null);
+    setEditHostId('');
     setEditMessage(null);
   };
 
@@ -339,6 +372,7 @@ export function HostHubCalendar({
     setEditMovedDate(
       event.variant === 'demo' ? override?.movedToDate ?? '' : '',
     );
+    setEditHostId(override?.overrideUserId ?? '');
     setEditMessage(null);
   };
 
@@ -347,6 +381,11 @@ export function HostHubCalendar({
     const trimmedMoveDate = editMovedDate.trim();
     const nextMoveDate =
       event.variant === 'demo' && trimmedMoveDate ? trimmedMoveDate : null;
+    const trimmedHostId = editHostId.trim();
+    const overrideUserId = trimmedHostId ? trimmedHostId : null;
+    const overrideUserName = overrideUserId
+      ? rosterMap.get(overrideUserId) ?? event.assignee ?? 'Unknown'
+      : null;
     setEditMessage(null);
     startTransition(async () => {
       const result = await updateScheduleEventOverride({
@@ -355,6 +394,8 @@ export function HostHubCalendar({
         time: editTime,
         isCanceled: editCanceled,
         movedToDate: nextMoveDate,
+        overrideUserId,
+        overrideUserName,
       });
       if (result.success) {
         setLocalOverrides((prev) => ({
@@ -363,6 +404,8 @@ export function HostHubCalendar({
             time: editTime.trim() ? editTime.trim() : null,
             isCanceled: editCanceled,
             movedToDate: nextMoveDate,
+            overrideUserId,
+            overrideUserName,
           },
         }));
         setEditMessage(result.message);
@@ -393,6 +436,7 @@ export function HostHubCalendar({
         setEditTime(nextDefaultTime.trim() ? nextDefaultTime : '');
         setEditCanceled(false);
         setEditMovedDate('');
+        setEditHostId('');
         setEditMessage(result.message);
       } else {
         setEditMessage(result.message);
@@ -414,6 +458,18 @@ export function HostHubCalendar({
             We assign the current month only. Past assignments remain visible,
             and future months appear with TBD placeholders.
           </p>
+          {refreshNotice && nextRefreshLabel ? (
+            <div className='mt-3 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700'>
+              <AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />
+              <span>
+                Eligibility rules were updated. Next month will regenerate on{' '}
+                <span className='font-semibold text-amber-800'>
+                  {nextRefreshLabel}
+                </span>
+                .
+              </span>
+            </div>
+          ) : null}
           <div className='mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground'>
             <button
               type='button'
@@ -720,6 +776,35 @@ export function HostHubCalendar({
                           {isEditing ? (
                             <div className='mt-3 space-y-3'>
                               <label className='flex flex-col gap-2 text-sm text-foreground'>
+                                Host override
+                                <select
+                                  value={editHostId}
+                                  onChange={(eventValue) =>
+                                    setEditHostId(eventValue.target.value)
+                                  }
+                                  disabled={isSaving || rosterOptions.length === 0}
+                                  className='w-full max-w-64 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
+                                >
+                                  <option value=''>
+                                    Use assigned host ({event.assignee ?? 'TBD'})
+                                  </option>
+                                  {rosterOptions.map((member) => (
+                                    <option key={member.userId} value={member.userId}>
+                                      {member.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className='text-xs text-muted-foreground'>
+                                  All members are available, even if they do not meet
+                                  eligibility rules.
+                                </span>
+                                {rosterOptions.length === 0 ? (
+                                  <span className='text-xs text-muted-foreground'>
+                                    No roster data available for overrides.
+                                  </span>
+                                ) : null}
+                              </label>
+                              <label className='flex flex-col gap-2 text-sm text-foreground'>
                                 Time
                                 <input
                                   type='time'
@@ -791,6 +876,7 @@ export function HostHubCalendar({
                                   type='button'
                                   onClick={() => {
                                     setEditingEventId(null);
+                                    setEditHostId('');
                                     setEditMessage(null);
                                   }}
                                   className='rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-secondary/70'

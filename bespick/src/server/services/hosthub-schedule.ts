@@ -5,6 +5,7 @@ import { db } from '@/server/db/client';
 import {
   demoDayAssignments,
   scheduleEventOverrides,
+  scheduleRefresh,
   scheduleRules,
   standupAssignments,
 } from '@/server/db/schema';
@@ -38,6 +39,11 @@ export type StandupAssignee = {
   name: string;
 };
 
+export type HostHubRosterMember = {
+  userId: string;
+  name: string;
+};
+
 export type DemoDayAssignment = {
   date: string;
   userId: string | null;
@@ -59,8 +65,23 @@ export type ScheduleEventOverride = {
   movedToDate: string | null;
   time: string | null;
   isCanceled: boolean;
+  overrideUserId: string | null;
+  overrideUserName: string | null;
   updatedAt: number;
   updatedBy: string | null;
+};
+
+export type RefreshAssignmentsSummary = {
+  checked: number;
+  kept: number;
+  updated: number;
+  replaced: number;
+  filled: number;
+};
+
+export type ScheduleRefreshNotice = {
+  pendingSince: number;
+  nextRefreshAt: number;
 };
 
 const MONTH_WINDOW = [-1, 0, 1, 2, 3];
@@ -68,6 +89,7 @@ const HISTORY_MONTH_LIMIT = 12;
 const DEMO_DAY_WEEKDAY = 3;
 const STANDUP_DAYS = new Set([1, 4]);
 const RULE_IDS: ScheduleRuleId[] = ['demo-day', 'standup'];
+const SCHEDULE_REFRESH_ID = 'hosthub';
 
 const pad2 = (value: number) => value.toString().padStart(2, '0');
 
@@ -175,6 +197,85 @@ const getMonthRange = (date: Date) => {
   return { start, end };
 };
 
+const getNextMonthStart = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth() + 1, 1);
+
+export async function markScheduleRefreshPending(timestamp = Date.now()) {
+  await db
+    .insert(scheduleRefresh)
+    .values({
+      id: SCHEDULE_REFRESH_ID,
+      pendingSince: timestamp,
+      refreshedAt: null,
+    })
+    .onConflictDoUpdate({
+      target: scheduleRefresh.id,
+      set: {
+        pendingSince: timestamp,
+      },
+    });
+}
+
+export async function markScheduleRefreshComplete(timestamp = Date.now()) {
+  await db
+    .insert(scheduleRefresh)
+    .values({
+      id: SCHEDULE_REFRESH_ID,
+      pendingSince: null,
+      refreshedAt: timestamp,
+    })
+    .onConflictDoUpdate({
+      target: scheduleRefresh.id,
+      set: {
+        pendingSince: null,
+        refreshedAt: timestamp,
+      },
+    });
+}
+
+export async function getScheduleRefreshNotice(
+  now: Date = new Date(),
+): Promise<ScheduleRefreshNotice | null> {
+  const row = await db
+    .select()
+    .from(scheduleRefresh)
+    .where(eq(scheduleRefresh.id, SCHEDULE_REFRESH_ID))
+    .get();
+  if (!row?.pendingSince) return null;
+  const pendingDate = new Date(row.pendingSince);
+  const nextRefresh = getNextMonthStart(pendingDate);
+  if (now >= nextRefresh) {
+    await db
+      .update(scheduleRefresh)
+      .set({ pendingSince: null })
+      .where(eq(scheduleRefresh.id, SCHEDULE_REFRESH_ID));
+    return null;
+  }
+  return {
+    pendingSince: row.pendingSince,
+    nextRefreshAt: nextRefresh.getTime(),
+  };
+}
+
+export async function clearFutureAssignmentsForRule(
+  ruleId: ScheduleRuleId,
+  baseDate: Date = new Date(),
+) {
+  const { end: currentMonthEnd } = getMonthRange(baseDate);
+  const currentMonthEndKey = toDateKey(currentMonthEnd);
+  if (ruleId === 'demo-day') {
+    await db
+      .delete(demoDayAssignments)
+      .where(gt(demoDayAssignments.date, currentMonthEndKey));
+    return;
+  }
+  if (ruleId === 'standup') {
+    await db
+      .delete(standupAssignments)
+      .where(gt(standupAssignments.date, currentMonthEndKey));
+  }
+}
+
 const getFirstWednesdayKey = (date: Date) => {
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -230,6 +331,21 @@ const getStandupDateKeysForMonth = (date: Date) => {
     cursor.setDate(cursor.getDate() + 1);
   }
   return keys;
+};
+
+const buildAvailability = <T extends { userId: string }>(
+  eligibleUsers: T[],
+  historyRows: Array<{ userId: string | null }>,
+) => {
+  const eligibleIds = new Set(eligibleUsers.map((user) => user.userId));
+  const used = new Set<string>();
+  for (const row of historyRows) {
+    if (row.userId && eligibleIds.has(row.userId)) {
+      used.add(row.userId);
+      if (used.size >= eligibleUsers.length) break;
+    }
+  }
+  return eligibleUsers.filter((user) => !used.has(user.userId));
 };
 
 export async function ensureDemoDayAssignmentsForWindow({
@@ -342,6 +458,108 @@ export async function ensureDemoDayAssignmentsForWindow({
   return Object.fromEntries(assignments.entries());
 }
 
+export async function refreshDemoDayAssignmentsForWindow({
+  baseDate,
+  eligibleUsers,
+}: {
+  baseDate: Date;
+  eligibleUsers: DemoDayAssignee[];
+}): Promise<RefreshAssignmentsSummary> {
+  await pruneDemoDayHistory(new Date());
+  const { end: currentMonthEnd } = getMonthRange(baseDate);
+  const currentMonthEndKey = toDateKey(currentMonthEnd);
+  await db
+    .delete(demoDayAssignments)
+    .where(gt(demoDayAssignments.date, currentMonthEndKey));
+
+  const todayKey = toDateKey(new Date());
+  const dateKeys = MONTH_WINDOW.map((offset) =>
+    getFirstWednesdayKey(addMonths(baseDate, offset)),
+  );
+  const assignableKeys = [getFirstWednesdayKey(baseDate)];
+
+  const existingRows = await db
+    .select()
+    .from(demoDayAssignments)
+    .where(inArray(demoDayAssignments.date, dateKeys));
+  const existingByDate = new Map(existingRows.map((row) => [row.date, row]));
+
+  const eligibleIds = new Set(eligibleUsers.map((user) => user.userId));
+  const futureKeys = assignableKeys.filter((dateKey) => dateKey >= todayKey);
+  const toAssign: string[] = [];
+  let kept = 0;
+
+  for (const dateKey of futureKeys) {
+    const row = existingByDate.get(dateKey);
+    if (row?.userId && eligibleIds.has(row.userId)) {
+      kept += 1;
+      continue;
+    }
+    toAssign.push(dateKey);
+  }
+
+  const history = await db
+    .select()
+    .from(demoDayAssignments)
+    .orderBy(desc(demoDayAssignments.date));
+  let available = buildAvailability(eligibleUsers, history);
+  let updated = 0;
+  let replaced = 0;
+  let filled = 0;
+
+  for (const dateKey of toAssign) {
+    let assignee: DemoDayAssignee | null = null;
+    if (eligibleUsers.length > 0) {
+      if (available.length === 0) {
+        available = [...eligibleUsers];
+      }
+      assignee = pickRandom(available);
+      if (assignee) {
+        available = available.filter((user) => user.userId !== assignee?.userId);
+      }
+    }
+
+    const row: DemoDayAssignment = {
+      date: dateKey,
+      userId: assignee?.userId ?? null,
+      userName: assignee?.name ?? 'TBD',
+      assignedAt: Date.now(),
+    };
+
+    await db
+      .insert(demoDayAssignments)
+      .values({
+        date: row.date,
+        userId: row.userId,
+        userName: row.userName,
+        assignedAt: row.assignedAt,
+      })
+      .onConflictDoUpdate({
+        target: demoDayAssignments.date,
+        set: {
+          userId: row.userId,
+          userName: row.userName,
+          assignedAt: row.assignedAt,
+        },
+      });
+
+    updated += 1;
+    if (existingByDate.get(dateKey)?.userId) {
+      replaced += 1;
+    } else {
+      filled += 1;
+    }
+  }
+
+  return {
+    checked: futureKeys.length,
+    kept,
+    updated,
+    replaced,
+    filled,
+  };
+}
+
 export async function getEligibleDemoDayRoster(): Promise<DemoDayAssignee[]> {
   const user = await currentUser();
   if (!user) return [];
@@ -374,6 +592,34 @@ export async function getEligibleDemoDayRoster(): Promise<DemoDayAssignee[]> {
       .filter((value): value is DemoDayAssignee => Boolean(value));
   } catch (error) {
     console.error('Failed to load roster names', error);
+    return [];
+  }
+}
+
+export async function getHostHubRoster(): Promise<HostHubRosterMember[]> {
+  const user = await currentUser();
+  if (!user) return [];
+
+  try {
+    const client = await clerkClient();
+    const users = await client.users.getUserList({ limit: 200 });
+    return users.data
+      .map((rosterUser) => {
+        const fullName =
+          `${rosterUser.firstName ?? ''} ${rosterUser.lastName ?? ''}`.trim();
+        const name =
+          fullName ||
+          rosterUser.username ||
+          rosterUser.emailAddresses[0]?.emailAddress ||
+          rosterUser.id;
+        return {
+          userId: rosterUser.id,
+          name,
+        };
+      })
+      .filter((value) => value.name.trim().length > 0);
+  } catch (error) {
+    console.error('Failed to load HostHub roster', error);
     return [];
   }
 }
@@ -522,6 +768,105 @@ export async function ensureStandupAssignmentsForWindow({
   return Object.fromEntries(assignments.entries());
 }
 
+export async function refreshStandupAssignmentsForWindow({
+  baseDate,
+  eligibleUsers,
+}: {
+  baseDate: Date;
+  eligibleUsers: StandupAssignee[];
+}): Promise<RefreshAssignmentsSummary> {
+  const { end: currentMonthEnd } = getMonthRange(baseDate);
+  const currentMonthEndKey = toDateKey(currentMonthEnd);
+  await db
+    .delete(standupAssignments)
+    .where(gt(standupAssignments.date, currentMonthEndKey));
+
+  const todayKey = toDateKey(new Date());
+  const dateKeys = getStandupDateKeysForWindow(baseDate);
+  const assignableKeys = getStandupDateKeysForMonth(baseDate);
+
+  const existingRows = await db
+    .select()
+    .from(standupAssignments)
+    .where(inArray(standupAssignments.date, dateKeys));
+  const existingByDate = new Map(existingRows.map((row) => [row.date, row]));
+
+  const eligibleIds = new Set(eligibleUsers.map((user) => user.userId));
+  const futureKeys = assignableKeys.filter((dateKey) => dateKey >= todayKey);
+  const toAssign: string[] = [];
+  let kept = 0;
+
+  for (const dateKey of futureKeys) {
+    const row = existingByDate.get(dateKey);
+    if (row?.userId && eligibleIds.has(row.userId)) {
+      kept += 1;
+      continue;
+    }
+    toAssign.push(dateKey);
+  }
+
+  const history = await db
+    .select()
+    .from(standupAssignments)
+    .orderBy(desc(standupAssignments.date));
+  let available = buildAvailability(eligibleUsers, history);
+  let updated = 0;
+  let replaced = 0;
+  let filled = 0;
+
+  for (const dateKey of toAssign) {
+    let assignee: StandupAssignee | null = null;
+    if (eligibleUsers.length > 0) {
+      if (available.length === 0) {
+        available = [...eligibleUsers];
+      }
+      assignee = pickRandom(available);
+      if (assignee) {
+        available = available.filter((user) => user.userId !== assignee?.userId);
+      }
+    }
+
+    const row: StandupAssignment = {
+      date: dateKey,
+      userId: assignee?.userId ?? null,
+      userName: assignee?.name ?? 'TBD',
+      assignedAt: Date.now(),
+    };
+
+    await db
+      .insert(standupAssignments)
+      .values({
+        date: row.date,
+        userId: row.userId,
+        userName: row.userName,
+        assignedAt: row.assignedAt,
+      })
+      .onConflictDoUpdate({
+        target: standupAssignments.date,
+        set: {
+          userId: row.userId,
+          userName: row.userName,
+          assignedAt: row.assignedAt,
+        },
+      });
+
+    updated += 1;
+    if (existingByDate.get(dateKey)?.userId) {
+      replaced += 1;
+    } else {
+      filled += 1;
+    }
+  }
+
+  return {
+    checked: futureKeys.length,
+    kept,
+    updated,
+    replaced,
+    filled,
+  };
+}
+
 export async function listStandupAssignmentsInRange({
   startDate,
   endDate,
@@ -592,6 +937,8 @@ export async function listScheduleEventOverridesInRange({
         movedToDate,
         time: row.time ?? null,
         isCanceled: row.isCanceled ?? false,
+        overrideUserId: row.overrideUserId ?? null,
+        overrideUserName: row.overrideUserName ?? null,
         updatedAt: row.updatedAt,
         updatedBy: row.updatedBy ?? null,
       };

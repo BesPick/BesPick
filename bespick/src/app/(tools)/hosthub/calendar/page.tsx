@@ -7,8 +7,10 @@ import {
   ensureDemoDayAssignmentsForWindow,
   getEligibleDemoDayRoster,
   ensureStandupAssignmentsForWindow,
+  getHostHubRoster,
   getEligibleStandupRoster,
   getScheduleRuleConfig,
+  getScheduleRefreshNotice,
   listScheduleEventOverridesInRange,
 } from '@/server/services/hosthub-schedule';
 
@@ -30,6 +32,7 @@ export default async function HostHubCalendarPage() {
     baseDate: now,
     eligibleUsers: eligibleStandupRoster,
   });
+  const roster = isAdmin ? await getHostHubRoster() : [];
   const demoRule = await getScheduleRuleConfig('demo-day');
   const standupRule = await getScheduleRuleConfig('standup');
   const startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -38,6 +41,7 @@ export default async function HostHubCalendarPage() {
     startDate,
     endDate,
   });
+  const refreshNotice = await getScheduleRefreshNotice(now);
   const eventOverrides = Object.fromEntries(
     overrides.map((override) => [
       `${override.eventType}-${override.date}`,
@@ -45,6 +49,8 @@ export default async function HostHubCalendarPage() {
         movedToDate: override.movedToDate,
         time: override.time,
         isCanceled: override.isCanceled,
+        overrideUserId: override.overrideUserId,
+        overrideUserName: override.overrideUserName,
         updatedAt: override.updatedAt,
       },
     ]),
@@ -61,6 +67,8 @@ export default async function HostHubCalendarPage() {
         demoDefaultTime={demoRule.defaultTime}
         standupDefaultTime={standupRule.defaultTime}
         eventOverrides={eventOverrides}
+        refreshNotice={refreshNotice}
+        roster={roster}
       />
     </section>
   );

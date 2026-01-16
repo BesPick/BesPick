@@ -10,7 +10,9 @@ import {
   type ScheduleRuleId,
 } from '@/lib/hosthub-schedule-rules';
 import {
+  clearFutureAssignmentsForRule,
   getScheduleRuleConfig,
+  markScheduleRefreshPending,
   saveScheduleRuleConfig,
 } from '@/server/services/hosthub-schedule';
 
@@ -66,6 +68,8 @@ export async function updateScheduleRule({
       config: normalized,
       updatedBy: userId ?? null,
     });
+    await clearFutureAssignmentsForRule(ruleId);
+    await markScheduleRefreshPending();
 
     return {
       success: true,

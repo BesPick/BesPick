@@ -101,6 +101,12 @@ CREATE TABLE IF NOT EXISTS schedule_rules (
   updated_by TEXT
 );
 
+CREATE TABLE IF NOT EXISTS schedule_refresh (
+  id TEXT PRIMARY KEY,
+  pending_since INTEGER,
+  refreshed_at INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS schedule_event_overrides (
   id TEXT PRIMARY KEY,
   date TEXT NOT NULL,
@@ -108,6 +114,8 @@ CREATE TABLE IF NOT EXISTS schedule_event_overrides (
   moved_to_date TEXT,
   time TEXT,
   is_canceled INTEGER NOT NULL,
+  override_user_id TEXT,
+  override_user_name TEXT,
   updated_at INTEGER NOT NULL,
   updated_by TEXT
 );
@@ -142,6 +150,22 @@ const hasMovedToDate = overrideColumns.some(
 if (!hasMovedToDate) {
   sqlite.exec(
     'ALTER TABLE schedule_event_overrides ADD COLUMN moved_to_date TEXT;',
+  );
+}
+const hasOverrideUserId = overrideColumns.some(
+  (column) => column.name === 'override_user_id',
+);
+if (!hasOverrideUserId) {
+  sqlite.exec(
+    'ALTER TABLE schedule_event_overrides ADD COLUMN override_user_id TEXT;',
+  );
+}
+const hasOverrideUserName = overrideColumns.some(
+  (column) => column.name === 'override_user_name',
+);
+if (!hasOverrideUserName) {
+  sqlite.exec(
+    'ALTER TABLE schedule_event_overrides ADD COLUMN override_user_name TEXT;',
   );
 }
 

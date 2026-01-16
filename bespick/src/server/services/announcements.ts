@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { clerkClient } from '@clerk/nextjs/server';
 import { and, asc, eq, gt, lte, ne, or } from 'drizzle-orm';
 import { db } from '@/server/db/client';
 import {
@@ -10,6 +11,7 @@ import {
 } from '@/server/db/schema';
 import { deleteUploads } from '@/server/services/storage';
 import { broadcast } from '@/server/events';
+import { isValidGroup, isValidPortfolioForGroup } from '@/lib/org';
 import type {
   AnnouncementDoc,
   Id,
@@ -173,6 +175,88 @@ function normalizeVotingParticipants(
   return normalized;
 }
 
+type VotingRosterEntry = {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  group: string | null;
+  portfolio: string | null;
+};
+
+type VotingRosterFilters = {
+  allowedGroups: Set<string>;
+  allowedPortfolios: Set<string>;
+  allowUngrouped: boolean;
+  allowAll: boolean;
+};
+
+async function loadVotingRoster(): Promise<VotingRosterEntry[]> {
+  try {
+    const client = await clerkClient();
+    const users = await client.users.getUserList({ limit: 500 });
+    return users.data.map((user) => {
+      const rawGroup = user.publicMetadata.group;
+      const normalizedGroup = isValidGroup(rawGroup) ? rawGroup : null;
+      const rawPortfolio = user.publicMetadata.portfolio;
+      const normalizedPortfolio =
+        normalizedGroup &&
+        isValidPortfolioForGroup(normalizedGroup, rawPortfolio)
+          ? rawPortfolio
+          : null;
+      return {
+        userId: user.id,
+        firstName: (user.firstName ?? '').trim(),
+        lastName: (user.lastName ?? '').trim(),
+        group: normalizedGroup,
+        portfolio: normalizedPortfolio,
+      };
+    });
+  } catch (error) {
+    console.error('Failed to load roster for voting participants', error);
+    return [];
+  }
+}
+
+function buildVotingRosterFilters(
+  announcement: AnnouncementDoc,
+): VotingRosterFilters {
+  const allowedGroups = Array.isArray(announcement.votingAllowedGroups)
+    ? announcement.votingAllowedGroups
+    : [];
+  const allowedPortfolios = Array.isArray(announcement.votingAllowedPortfolios)
+    ? announcement.votingAllowedPortfolios
+    : [];
+  const allowAll = allowedGroups.length === 0 && allowedPortfolios.length === 0;
+  return {
+    allowedGroups: new Set(allowedGroups),
+    allowedPortfolios: new Set(allowedPortfolios),
+    allowUngrouped: allowAll || Boolean(announcement.votingAllowUngrouped),
+    allowAll,
+  };
+}
+
+function shouldIncludeRosterEntry(
+  entry: VotingRosterEntry,
+  filters: VotingRosterFilters,
+) {
+  if (
+    !entry.firstName.trim() &&
+    !entry.lastName.trim()
+  ) {
+    return false;
+  }
+  if (!entry.group) {
+    return filters.allowUngrouped;
+  }
+  if (filters.allowAll) {
+    return true;
+  }
+  if (entry.portfolio && filters.allowedPortfolios.has(entry.portfolio)) {
+    return true;
+  }
+  return filters.allowedGroups.has(entry.group);
+}
+
 function resetVotingParticipantVotes(
   participants: VotingParticipant[] | null | undefined,
 ) {
@@ -249,7 +333,42 @@ export async function getAnnouncement(
     .from(announcements)
     .where(eq(announcements.id, id))
     .get();
-  return row ? mapAnnouncementRow(row) : null;
+  if (!row) return null;
+  const announcement = mapAnnouncementRow(row);
+  if (announcement.eventType !== 'voting' || announcement.status === 'archived') {
+    return announcement;
+  }
+
+  const roster = await loadVotingRoster();
+  if (roster.length === 0) {
+    return announcement;
+  }
+  const filters = buildVotingRosterFilters(announcement);
+  const existing = normalizeVotingParticipants(announcement.votingParticipants);
+  const participantMap = new Map(
+    existing.map((participant) => [participant.userId, participant]),
+  );
+  let added = false;
+  for (const entry of roster) {
+    if (!shouldIncludeRosterEntry(entry, filters)) continue;
+    if (participantMap.has(entry.userId)) continue;
+    participantMap.set(entry.userId, {
+      userId: entry.userId,
+      firstName: entry.firstName,
+      lastName: entry.lastName,
+      group: entry.group,
+      portfolio: entry.portfolio,
+      votes: 0,
+    });
+    added = true;
+  }
+  if (!added) {
+    return announcement;
+  }
+  return {
+    ...announcement,
+    votingParticipants: Array.from(participantMap.values()),
+  };
 }
 
 export async function createAnnouncement(

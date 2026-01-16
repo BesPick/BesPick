@@ -39,12 +39,16 @@ export async function updateScheduleEventOverride({
   time,
   isCanceled,
   movedToDate,
+  overrideUserId,
+  overrideUserName,
 }: {
   date: string;
   eventType: HostHubEventType;
   time: string;
   isCanceled: boolean;
   movedToDate?: string | null;
+  overrideUserId?: string | null;
+  overrideUserName?: string | null;
 }): Promise<UpdateScheduleEventOverrideResult> {
   if (!(await checkRole('admin'))) {
     return {
@@ -78,6 +82,17 @@ export async function updateScheduleEventOverride({
     };
   }
 
+  const normalizedOverrideUserId =
+    typeof overrideUserId === 'string' && overrideUserId.trim()
+      ? overrideUserId.trim()
+      : null;
+  const normalizedOverrideUserName =
+    normalizedOverrideUserId &&
+    typeof overrideUserName === 'string' &&
+    overrideUserName.trim()
+      ? overrideUserName.trim()
+      : null;
+
   try {
     const { userId } = await auth();
     const id = getEventOverrideId(date, eventType);
@@ -88,6 +103,8 @@ export async function updateScheduleEventOverride({
       movedToDate: normalizedMoveDate,
       time: normalizedTime,
       isCanceled,
+      overrideUserId: normalizedOverrideUserId,
+      overrideUserName: normalizedOverrideUserName,
       updatedAt: Date.now(),
       updatedBy: userId ?? null,
     };
@@ -101,6 +118,8 @@ export async function updateScheduleEventOverride({
           movedToDate: payload.movedToDate,
           time: payload.time,
           isCanceled: payload.isCanceled,
+          overrideUserId: payload.overrideUserId,
+          overrideUserName: payload.overrideUserName,
           updatedAt: payload.updatedAt,
           updatedBy: payload.updatedBy,
         },

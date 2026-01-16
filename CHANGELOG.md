@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-01-16
+
+- Added per-user add/remove vote limits for voting events and enforced them on purchases.
+- Added zero-cost voting submission flow without PayPal checkout.
+- Added API-backed image serving and moved uploads to a persistent data directory by default.
+- Prompt admins to refresh HostHub assignments after eligibility updates, with next-month regeneration notices.
+
+## [1.0.2] - 2026-01-15
+
+- Email domain authentication enabled to only allow "teambespin.us"
+
 ## [1.0.0] - 2026-01-14
 
 - Updated all credentials to prod (Clerk, Paypal).

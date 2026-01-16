@@ -128,6 +128,12 @@ export const scheduleRules = sqliteTable('schedule_rules', {
   updatedBy: text('updated_by'),
 });
 
+export const scheduleRefresh = sqliteTable('schedule_refresh', {
+  id: text('id').primaryKey(),
+  pendingSince: integer('pending_since', { mode: 'number' }),
+  refreshedAt: integer('refreshed_at', { mode: 'number' }),
+});
+
 export const scheduleEventOverrides = sqliteTable(
   'schedule_event_overrides',
   {
@@ -137,6 +143,8 @@ export const scheduleEventOverrides = sqliteTable(
     movedToDate: text('moved_to_date'),
     time: text('time'),
     isCanceled: integer('is_canceled', { mode: 'boolean' }).notNull(),
+    overrideUserId: text('override_user_id'),
+    overrideUserName: text('override_user_name'),
     updatedAt: integer('updated_at', { mode: 'number' }).notNull(),
     updatedBy: text('updated_by'),
   },
@@ -158,6 +166,8 @@ export type StandupAssignmentRow = typeof standupAssignments.$inferSelect;
 export type StandupAssignmentInsert = typeof standupAssignments.$inferInsert;
 export type ScheduleRuleRow = typeof scheduleRules.$inferSelect;
 export type ScheduleRuleInsert = typeof scheduleRules.$inferInsert;
+export type ScheduleRefreshRow = typeof scheduleRefresh.$inferSelect;
+export type ScheduleRefreshInsert = typeof scheduleRefresh.$inferInsert;
 export type ScheduleEventOverrideRow =
   typeof scheduleEventOverrides.$inferSelect;
 export type ScheduleEventOverrideInsert =
