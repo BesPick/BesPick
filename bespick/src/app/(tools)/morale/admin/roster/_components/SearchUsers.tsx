@@ -49,24 +49,34 @@ export const SearchUsers = () => {
     rankValue,
   ]);
 
-  const allPortfolios = useMemo(
-    () => GROUP_OPTIONS.flatMap((option) => option.portfolios),
+  const allPortfolios = useMemo<string[]>(
+    () =>
+      GROUP_OPTIONS.flatMap((option) => option.portfolios).map(
+        (value) => value as string,
+      ),
     [],
   );
-  const portfolioOptions = useMemo(() => {
+  const portfolioOptions = useMemo<string[]>(() => {
     if (group && isValidGroup(group)) {
-      return [...getPortfoliosForGroup(group)];
+      return getPortfoliosForGroup(group).map(
+        (value) => value as string,
+      );
     }
     return allPortfolios;
   }, [allPortfolios, group]);
 
-  const allRanks = useMemo(
-    () => [...ENLISTED_RANKS, ...OFFICER_RANKS],
+  const allRanks = useMemo<string[]>(
+    () =>
+      [...ENLISTED_RANKS, ...OFFICER_RANKS].map(
+        (value) => value as string,
+      ),
     [],
   );
-  const rankOptions = useMemo(() => {
+  const rankOptions = useMemo<string[]>(() => {
     if (rankCategory === 'Enlisted' || rankCategory === 'Officer') {
-      return [...getRanksForCategory(rankCategory)];
+      return getRanksForCategory(rankCategory).map(
+        (value) => value as string,
+      );
     }
     if (rankCategory === 'Civilian') {
       return [];
