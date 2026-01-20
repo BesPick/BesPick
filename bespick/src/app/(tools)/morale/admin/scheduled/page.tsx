@@ -23,16 +23,16 @@ const SCHEDULED_HEADER_STORAGE_KEY = 'bespickScheduledHeaderDismissed';
 export default function ScheduledPage() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
-  const isAdmin =
-    (user?.publicMetadata?.role as string | null | undefined) === 'admin';
+  const role = user?.publicMetadata?.role as string | null | undefined;
+  const isMoraleAdmin = role === 'admin' || role === 'moderator';
 
   React.useEffect(() => {
-    if (!isLoaded || isAdmin) {
+    if (!isLoaded || isMoraleAdmin) {
       return;
     }
 
     router.replace('/');
-  }, [isLoaded, isAdmin, router]);
+  }, [isLoaded, isMoraleAdmin, router]);
 
   if (!isLoaded) {
     return (
@@ -46,7 +46,7 @@ export default function ScheduledPage() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isMoraleAdmin) {
     return null;
   }
 

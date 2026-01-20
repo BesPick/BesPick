@@ -8,7 +8,7 @@ export default async function AdminCreatePage({
 }: {
   searchParams?: Promise<{ edit?: string }>;
 }) {
-  if (!(await checkRole('admin'))) {
+  if (!(await checkRole(['admin', 'moderator']))) {
     redirect('/');
   }
 

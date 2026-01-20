@@ -19,12 +19,12 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   }
 
   // Protect all routes starting with `/morale/admin`
-  if (
-    isAdminRoute(req) &&
-    (await auth()).sessionClaims?.metadata?.role !== 'admin'
-  ) {
-    const url = new URL('/', req.url);
-    return NextResponse.redirect(url);
+  if (isAdminRoute(req)) {
+    const role = (await auth()).sessionClaims?.metadata?.role ?? '';
+    if (role !== 'admin' && role !== 'moderator') {
+      const url = new URL('/', req.url);
+      return NextResponse.redirect(url);
+    }
   }
 });
 

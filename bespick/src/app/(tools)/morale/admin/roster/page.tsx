@@ -29,9 +29,11 @@ export default async function AdminRosterPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  if (!(await checkRole('admin'))) {
+  const canViewRoster = await checkRole(['admin', 'moderator']);
+  if (!canViewRoster) {
     redirect('/');
   }
+  const canEditRoster = await checkRole('admin');
 
   const params = await searchParams;
   const getParam = (key: string) => {
@@ -52,7 +54,11 @@ export default async function AdminRosterPage({
     value === UNASSIGNED_VALUE;
 
   const roleFilter =
-    rawRole === 'admin' || rawRole === 'member' ? rawRole : '';
+    rawRole === 'admin' ||
+    rawRole === 'moderator' ||
+    rawRole === 'member'
+      ? rawRole
+      : '';
   const groupFilter = isValidGroup(rawGroup)
     ? rawGroup
     : isUnassigned(rawGroup)
@@ -133,7 +139,11 @@ export default async function AdminRosterPage({
         : null;
     const rawRole = user.publicMetadata.role;
     const normalizedRole =
-      rawRole === 'admin' ? 'admin' : 'member';
+      rawRole === 'admin'
+        ? 'admin'
+        : rawRole === 'moderator'
+        ? 'moderator'
+        : 'member';
 
     return {
       user,
@@ -147,6 +157,12 @@ export default async function AdminRosterPage({
 
   const filteredUsers = normalizedUsers.filter((entry) => {
     if (roleFilter === 'admin' && entry.normalizedRole !== 'admin') {
+      return false;
+    }
+    if (
+      roleFilter === 'moderator' &&
+      entry.normalizedRole !== 'moderator'
+    ) {
       return false;
     }
     if (roleFilter === 'member' && entry.normalizedRole !== 'member') {
@@ -247,10 +263,12 @@ export default async function AdminRosterPage({
     <div className='mx-auto w-full max-w-5xl space-y-8 px-4 py-10'>
       <header className='rounded-2xl border border-border bg-card p-6 shadow-sm'>
         <h1 className='text-3xl font-semibold text-foreground'>
-          Admin Dashboard
+          {canEditRoster ? 'Admin Dashboard' : 'Moderator Dashboard'}
         </h1>
         <p className='mt-2 text-sm text-muted-foreground'>
-          Manage user roles and assignments and other information.
+          {canEditRoster
+            ? 'Manage user roles and assignments and other information.'
+            : 'View user roles and assignments.'}
         </p>
       </header>
 
@@ -288,6 +306,7 @@ export default async function AdminRosterPage({
                   rankCategory: entry.normalizedRankCategory,
                   rank: entry.normalizedRank,
                 }}
+                canEdit={canEditRoster}
               />
             );
           })

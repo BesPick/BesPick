@@ -343,12 +343,42 @@ export async function getAnnouncement(
   if (roster.length === 0) {
     return announcement;
   }
+  const rosterById = new Map(
+    roster.map((entry) => [entry.userId, entry]),
+  );
   const filters = buildVotingRosterFilters(announcement);
   const existing = normalizeVotingParticipants(announcement.votingParticipants);
+  let changed = false;
   const participantMap = new Map(
-    existing.map((participant) => [participant.userId, participant]),
+    existing.map((participant) => {
+      const rosterEntry = rosterById.get(participant.userId);
+      if (!rosterEntry) {
+        return [participant.userId, participant];
+      }
+      const hasRosterName =
+        rosterEntry.firstName.trim() || rosterEntry.lastName.trim();
+      const next = {
+        ...participant,
+        firstName: hasRosterName
+          ? rosterEntry.firstName
+          : participant.firstName,
+        lastName: hasRosterName
+          ? rosterEntry.lastName
+          : participant.lastName,
+        group: rosterEntry.group,
+        portfolio: rosterEntry.portfolio,
+      };
+      if (
+        next.firstName !== participant.firstName ||
+        next.lastName !== participant.lastName ||
+        next.group !== participant.group ||
+        next.portfolio !== participant.portfolio
+      ) {
+        changed = true;
+      }
+      return [participant.userId, next];
+    }),
   );
-  let added = false;
   for (const entry of roster) {
     if (!shouldIncludeRosterEntry(entry, filters)) continue;
     if (participantMap.has(entry.userId)) continue;
@@ -360,9 +390,9 @@ export async function getAnnouncement(
       portfolio: entry.portfolio,
       votes: 0,
     });
-    added = true;
+    changed = true;
   }
-  if (!added) {
+  if (!changed) {
     return announcement;
   }
   return {

@@ -29,6 +29,7 @@ type UserRoleCardProps = {
     rankCategory: RankCategory | null;
     rank: Rank | null;
   };
+  canEdit?: boolean;
 };
 
 type ToastState = {
@@ -36,9 +37,20 @@ type ToastState = {
   variant: 'success' | 'error';
 };
 
-const normalizeRole = (role: string | null) => (role === 'admin' ? role : null);
+const normalizeRole = (role: string | null) =>
+  role === 'admin' || role === 'moderator' ? role : null;
 
-export function UserRoleCard({ user }: UserRoleCardProps) {
+const formatRoleLabel = (role: string | null) => {
+  if (!role) return 'No role assigned';
+  if (role === 'admin') return 'Admin';
+  if (role === 'moderator') return 'Moderator';
+  return role;
+};
+
+export function UserRoleCard({
+  user,
+  canEdit = true,
+}: UserRoleCardProps) {
   const router = useRouter();
   const [currentRole, setCurrentRole] = useState<string | null>(
     normalizeRole(user.role),
@@ -54,7 +66,7 @@ export function UserRoleCard({ user }: UserRoleCardProps) {
   const [isPending, startTransition] = useTransition();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const roleLabel = currentRole ?? 'No role assigned';
+  const roleLabel = formatRoleLabel(currentRole);
 
   useEffect(() => {
     return () => {
@@ -85,6 +97,9 @@ export function UserRoleCard({ user }: UserRoleCardProps) {
     rankCategory?: RankCategory | null;
     rank?: Rank | null;
   }) => {
+    if (!canEdit) {
+      return;
+    }
     startTransition(async () => {
       const payload = {
         id: user.id,
@@ -162,6 +177,9 @@ export function UserRoleCard({ user }: UserRoleCardProps) {
   };
 
   const handleDeleteUser = () => {
+    if (!canEdit) {
+      return;
+    }
     if (!window.confirm(`Delete ${user.fullName}? This cannot be undone.`)) {
       return;
     }
@@ -181,14 +199,18 @@ export function UserRoleCard({ user }: UserRoleCardProps) {
     ? getPortfoliosForGroup(currentGroup)
     : [];
   const portfolioSelectDisabled =
-    !currentGroup || availablePortfolios.length === 0 || isPending;
+    !currentGroup ||
+    availablePortfolios.length === 0 ||
+    isPending ||
+    !canEdit;
   const availableRanks = currentRankCategory
     ? getRanksForCategory(currentRankCategory)
     : [];
   const rankSelectDisabled =
     !currentRankCategory ||
     availableRanks.length === 0 ||
-    isPending;
+    isPending ||
+    !canEdit;
 
   const buttonClasses =
     'inline-flex items-center justify-center rounded-md border border-border bg-secondary px-4 py-2 text-sm font-medium transition hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60';
@@ -209,36 +231,53 @@ export function UserRoleCard({ user }: UserRoleCardProps) {
         </div>
 
         <div className='mt-5 flex flex-wrap gap-3'>
-          <button
-            type='button'
-            onClick={() => handleRoleChange('admin')}
-            className={`${buttonClasses} text-foreground`}
-            disabled={isPending || currentRole === 'admin'}
-          >
-            {currentRole === 'admin' ? 'Already Admin' : 'Make Admin'}
-          </button>
+          {canEdit ? (
+            <>
+              <button
+                type='button'
+                onClick={() => handleRoleChange('admin')}
+                className={`${buttonClasses} text-foreground`}
+                disabled={isPending || currentRole === 'admin'}
+              >
+                {currentRole === 'admin' ? 'Already Admin' : 'Make Admin'}
+              </button>
 
-          <button
-            type='button'
-            onClick={() => handleRoleChange(null)}
-            className={`${buttonClasses} text-danger`}
-            disabled={isPending || currentRole === null}
-          >
-            {currentRole === null
-              ? 'Remove Role'
-              : 'Remove ' +
-                (currentRole.charAt(0).toUpperCase() + currentRole.slice(1)) +
-                ' Role'}
-          </button>
+              <button
+                type='button'
+                onClick={() => handleRoleChange('moderator')}
+                className={`${buttonClasses} text-foreground`}
+                disabled={isPending || currentRole === 'moderator'}
+              >
+                {currentRole === 'moderator'
+                  ? 'Already Moderator'
+                  : 'Make Moderator'}
+              </button>
 
-          <button
-            type='button'
-            onClick={handleDeleteUser}
-            className={`${buttonClasses} text-danger`}
-            disabled={isPending}
-          >
-            Delete User
-          </button>
+              <button
+                type='button'
+                onClick={() => handleRoleChange(null)}
+                className={`${buttonClasses} text-danger`}
+                disabled={isPending || currentRole === null}
+              >
+                {currentRole === null
+                  ? 'Remove Role'
+                  : `Remove ${formatRoleLabel(currentRole)} Role`}
+              </button>
+
+              <button
+                type='button'
+                onClick={handleDeleteUser}
+                className={`${buttonClasses} text-danger`}
+                disabled={isPending}
+              >
+                Delete User
+              </button>
+            </>
+          ) : (
+            <div className='rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground'>
+              Read-only access. Only admins can edit roles or assignments.
+            </div>
+          )}
         </div>
 
         <details className='mt-6 rounded-xl border border-border bg-background/60 px-4 py-3'>
@@ -255,7 +294,7 @@ export function UserRoleCard({ user }: UserRoleCardProps) {
                 onChange={(event) =>
                   handleRankCategoryChange(event.target.value)
                 }
-                disabled={isPending}
+                disabled={isPending || !canEdit}
                 className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
               >
                 <option value=''>No rank category</option>
@@ -296,7 +335,7 @@ export function UserRoleCard({ user }: UserRoleCardProps) {
               <select
                 value={currentGroup ?? ''}
                 onChange={(event) => handleGroupChange(event.target.value)}
-                disabled={isPending}
+                disabled={isPending || !canEdit}
                 className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
               >
                 <option value=''>No group assigned</option>

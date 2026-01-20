@@ -10,8 +10,8 @@ import {
 } from '@/lib/org';
 
 export async function GET() {
-  const isAdmin = await checkRole('admin');
-  if (!isAdmin) {
+  const canAccess = await checkRole(['admin', 'moderator']);
+  if (!canAccess) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

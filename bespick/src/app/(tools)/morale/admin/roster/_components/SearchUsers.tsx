@@ -180,6 +180,7 @@ export const SearchUsers = () => {
             >
               <option value=''>All roles</option>
               <option value='admin'>Admin</option>
+              <option value='moderator'>Moderator</option>
               <option value='member'>Member</option>
             </select>
           </label>

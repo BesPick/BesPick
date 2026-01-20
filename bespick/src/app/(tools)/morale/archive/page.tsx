@@ -51,8 +51,8 @@ export default function ArchivePage() {
 
   const activities = localActivities ?? archivedActivities ?? [];
   const isLoading = archivedActivities === undefined;
-  const isAdmin =
-    (user?.publicMetadata?.role as string | null | undefined) === 'admin';
+  const role = user?.publicMetadata?.role as string | null | undefined;
+  const isMoraleAdmin = role === 'admin' || role === 'moderator';
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -153,7 +153,7 @@ export default function ArchivePage() {
             <ArchiveCard
               key={activity._id}
               activity={activity}
-              canManage={isAdmin}
+              canManage={isMoraleAdmin}
               onDelete={handleDelete}
               onEdit={handleEdit}
               deletingId={deletingId}
@@ -168,7 +168,7 @@ export default function ArchivePage() {
         <PollModal
           pollId={activePollId}
           onClose={() => setActivePollId(null)}
-          isAdmin={isAdmin}
+          isAdmin={isMoraleAdmin}
           canVote={Boolean(user)}
         />
       )}

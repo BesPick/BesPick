@@ -28,8 +28,8 @@ const activeClasses = 'border-primary/30 bg-primary/15 text-primary';
 export function MoraleSubHeader() {
   const pathname = usePathname();
   const { user } = useUser();
-  const isAdmin =
-    (user?.publicMetadata?.role as string | null | undefined) === 'admin';
+  const role = user?.publicMetadata?.role as string | null | undefined;
+  const isMoraleAdmin = role === 'admin' || role === 'moderator';
 
   const navItems = useMemo<NavItem[]>(
     () => [
@@ -68,7 +68,7 @@ export function MoraleSubHeader() {
         </div>
         <nav className='flex flex-wrap items-center gap-2'>
           {navItems
-            .filter((item) => (item.adminOnly ? isAdmin : true))
+            .filter((item) => (item.adminOnly ? isMoraleAdmin : true))
             .map((item) => {
               const isActive = item.matches
                 ? item.matches(pathname)

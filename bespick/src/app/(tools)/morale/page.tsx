@@ -87,8 +87,8 @@ export default function DashboardPage() {
     React.useState<Announcement | null>(null);
   const isLoading = activities === undefined;
   const hasActivities = (activities?.length ?? 0) > 0;
-  const isAdmin =
-    (user?.publicMetadata?.role as string | null | undefined) === 'admin';
+  const role = user?.publicMetadata?.role as string | null | undefined;
+  const isMoraleAdmin = role === 'admin' || role === 'moderator';
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -210,7 +210,7 @@ export default function DashboardPage() {
             <ActivityCard
               key={activity._id}
               activity={activity}
-              canManage={isAdmin}
+              canManage={isMoraleAdmin}
               onDelete={handleDelete}
               onEdit={handleEdit}
               onArchive={handleArchive}
@@ -227,7 +227,7 @@ export default function DashboardPage() {
         <PollModal
           pollId={activePollId}
           onClose={() => setActivePollId(null)}
-          isAdmin={isAdmin}
+          isAdmin={isMoraleAdmin}
           canVote={Boolean(user)}
         />
       )}

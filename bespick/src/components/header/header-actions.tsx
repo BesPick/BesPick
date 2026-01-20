@@ -104,8 +104,9 @@ export function HeaderActions() {
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [isAssignmentPending, startAssignmentTransition] = useTransition();
 
-  const isAdmin =
-    (user?.publicMetadata?.role as string | null | undefined) === 'admin';
+  const role = user?.publicMetadata?.role as string | null | undefined;
+  const isAdmin = role === 'admin';
+  const isMoraleAdmin = isAdmin || role === 'moderator';
   const rawGroup = user?.publicMetadata?.group;
   const normalizedGroup = isValidGroup(rawGroup) ? rawGroup : null;
   const rawPortfolio = user?.publicMetadata?.portfolio;
@@ -158,7 +159,7 @@ export function HeaderActions() {
       { href: '/games', label: 'Games', icon: Gamepad2 },
     ];
 
-    if (isAdmin) {
+    if (isMoraleAdmin) {
       items.push({
         href: '/morale/admin/roster',
         label: 'Roster',
@@ -167,7 +168,7 @@ export function HeaderActions() {
     }
 
     return items;
-  }, [isAdmin]);
+  }, [isMoraleAdmin]);
 
   useEffect(() => {
     if (!open) {

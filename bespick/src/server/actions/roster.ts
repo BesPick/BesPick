@@ -31,7 +31,8 @@ export type DeleteUserResult = {
   message: string;
 };
 
-const normalizeRole = (role: string | null) => (role === 'admin' ? role : null);
+const normalizeRole = (role: string | null) =>
+  role === 'admin' || role === 'moderator' ? role : null;
 
 export async function updateUserRole({
   id,
