@@ -34,25 +34,26 @@ export function MoraleSubHeader() {
   const navItems = useMemo<NavItem[]>(
     () => [
       {
-        href: '/admin/create',
+        href: '/morale/admin/create',
         label: 'Create',
         icon: CirclePlus,
         adminOnly: true,
       },
       {
-        href: '/admin/scheduled',
+        href: '/morale/admin/scheduled',
         label: 'Scheduled',
         icon: CalendarClock,
         adminOnly: true,
       },
       {
-        href: '/dashboard',
+        href: '/morale',
         label: 'Dashboard',
         icon: LayoutGrid,
-        matches: (path) => path.startsWith('/dashboard'),
+        matches: (path) =>
+          path === '/morale' || path.startsWith('/morale/dashboard'),
       },
-      { href: '/archive', label: 'Archive', icon: Archive },
-      { href: '/boost', label: 'Boost', icon: CreditCard },
+      { href: '/morale/archive', label: 'Archive', icon: Archive },
+      { href: '/morale/boost', label: 'Boost', icon: CreditCard },
     ],
     [],
   );

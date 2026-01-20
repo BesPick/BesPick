@@ -4,7 +4,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)']);
 
-const isAdminRoute = createRouteMatcher(['/admin(.*)']);
+const isAdminRoute = createRouteMatcher(['/morale/admin(.*)']);
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
   const url = new URL(req.url);
@@ -18,7 +18,7 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
     return NextResponse.redirect(new URL('/sign-up', url.origin));
   }
 
-  // Protect all routes starting with `/admin`
+  // Protect all routes starting with `/morale/admin`
   if (
     isAdminRoute(req) &&
     (await auth()).sessionClaims?.metadata?.role !== 'admin'

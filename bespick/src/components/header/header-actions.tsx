@@ -154,12 +154,16 @@ export function HeaderActions() {
   const navItems = useMemo(() => {
     const items = [
       { href: '/hosthub', label: 'HostHub', icon: Server },
-      { href: '/dashboard', label: 'Morale', icon: HeartPulse },
+      { href: '/morale', label: 'Morale', icon: HeartPulse },
       { href: '/games', label: 'Games', icon: Gamepad2 },
     ];
 
     if (isAdmin) {
-      items.push({ href: '/admin/roster', label: 'Roster', icon: Users });
+      items.push({
+        href: '/morale/admin/roster',
+        label: 'Roster',
+        icon: Users,
+      });
     }
 
     return items;

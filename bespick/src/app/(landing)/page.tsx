@@ -46,7 +46,7 @@ export default function HomePage() {
         </Link>
 
         <Link
-          href='/dashboard'
+          href='/morale'
           className='group rounded-3xl border border-border bg-card/70 p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md'
         >
           <div className='flex items-center gap-3'>

@@ -50,7 +50,9 @@ export default async function HostHubPage() {
   const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
   const endDate = new Date(now.getFullYear(), now.getMonth() + 4, 0);
 
-  const shifts: ShiftEntry[] = [];
+  const currentShifts: ShiftEntry[] = [];
+  const pastShifts: ShiftEntry[] = [];
+  const todayKey = toDateKey(now);
 
   if (user) {
     const eligibleRoster = await getEligibleDemoDayRoster();
@@ -106,6 +108,8 @@ export default async function HostHubPage() {
     while (cursor <= endDate) {
       const dateLabel = formatDateLabel(cursor);
       const dateKey = toDateKey(cursor);
+      const targetShifts =
+        dateKey < todayKey ? pastShifts : currentShifts;
 
       const standupAssignment = standupAssignmentsByDate.get(dateKey);
       const standupOverride = overridesByKey.get(
@@ -117,7 +121,7 @@ export default async function HostHubPage() {
       );
       const standupCanceled = standupOverride?.isCanceled ?? false;
       if (standupAssignment?.userId === user.id) {
-        shifts.push({
+        targetShifts.push({
           id: `standup-${dateKey}`,
           date: dateLabel,
           time: standupTime,
@@ -138,7 +142,7 @@ export default async function HostHubPage() {
           );
           const demoCanceled = movedDemoOverride?.isCanceled ?? false;
           if (assignment?.userId === user.id) {
-            shifts.push({
+            targetShifts.push({
               id: `demo-${movedDemoOverride.date}`,
               date: dateLabel,
               time: demoTime,
@@ -160,7 +164,7 @@ export default async function HostHubPage() {
         );
         const demoCanceled = demoOverride?.isCanceled ?? false;
         if (assignment?.userId === user.id) {
-          shifts.push({
+          targetShifts.push({
             id: `demo-${dateKey}`,
             date: dateLabel,
             time: demoTime,
@@ -184,7 +188,10 @@ export default async function HostHubPage() {
           Sign in to view your schedule.
         </div>
       ) : (
-        <MyScheduleList shifts={shifts} />
+        <MyScheduleList
+          currentShifts={currentShifts}
+          pastShifts={pastShifts}
+        />
       )}
     </section>
   );

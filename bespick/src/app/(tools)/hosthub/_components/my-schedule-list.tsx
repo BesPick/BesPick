@@ -16,54 +16,95 @@ export type ShiftEntry = {
 };
 
 type MyScheduleListProps = {
-  shifts: ShiftEntry[];
+  currentShifts: ShiftEntry[];
+  pastShifts: ShiftEntry[];
 };
 
-export function MyScheduleList({ shifts }: MyScheduleListProps) {
+type ScheduleSectionProps = {
+  title: string;
+  shifts: ShiftEntry[];
+  emptyMessage: string;
+  onSelect: (id: string) => void;
+};
+
+function ScheduleSection({
+  title,
+  shifts,
+  emptyMessage,
+  onSelect,
+}: ScheduleSectionProps) {
+  return (
+    <div className='rounded-2xl border border-border bg-card/70 p-4 shadow-sm sm:p-6'>
+      <h3 className='mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground'>
+        {title}
+      </h3>
+      <div className='hidden grid-cols-3 gap-3 border-b border-border pb-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid'>
+        <span>Date</span>
+        <span>Time</span>
+        <span>Details</span>
+      </div>
+      {shifts.length === 0 ? (
+        <div className='py-6 text-sm text-muted-foreground'>
+          {emptyMessage}
+        </div>
+      ) : (
+        <ul className='divide-y divide-border'>
+          {shifts.map((shift) => (
+            <li key={shift.id}>
+              <button
+                type='button'
+                onClick={() => onSelect(shift.id)}
+                className='w-full py-4 text-left text-sm text-foreground transition hover:bg-secondary/30'
+              >
+                <div className='flex flex-col gap-1 sm:grid sm:grid-cols-3 sm:gap-3'>
+                  <span className='font-medium'>{shift.date}</span>
+                  <span className='text-muted-foreground sm:text-foreground'>
+                    {shift.time}
+                  </span>
+                  <span className='text-muted-foreground'>
+                    {shift.details}
+                  </span>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function MyScheduleList({
+  currentShifts,
+  pastShifts,
+}: MyScheduleListProps) {
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
+  const allShifts = useMemo(
+    () => [...currentShifts, ...pastShifts],
+    [currentShifts, pastShifts],
+  );
   const activeShift = useMemo(
-    () => shifts.find((shift) => shift.id === activeShiftId) ?? null,
-    [activeShiftId, shifts],
+    () => allShifts.find((shift) => shift.id === activeShiftId) ?? null,
+    [activeShiftId, allShifts],
   );
 
   const closeModal = () => setActiveShiftId(null);
 
   return (
     <>
-      <div className='rounded-2xl border border-border bg-card/70 p-4 shadow-sm sm:p-6'>
-        <div className='hidden grid-cols-3 gap-3 border-b border-border pb-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid'>
-          <span>Date</span>
-          <span>Time</span>
-          <span>Details</span>
-        </div>
-        {shifts.length === 0 ? (
-          <div className='py-6 text-sm text-muted-foreground'>
-            No shifts assigned yet. Shift date, time, and details will appear
-            here.
-          </div>
-        ) : (
-          <ul className='divide-y divide-border'>
-            {shifts.map((shift) => (
-              <li key={shift.id}>
-                <button
-                  type='button'
-                  onClick={() => setActiveShiftId(shift.id)}
-                  className='w-full py-4 text-left text-sm text-foreground transition hover:bg-secondary/30'
-                >
-                  <div className='flex flex-col gap-1 sm:grid sm:grid-cols-3 sm:gap-3'>
-                    <span className='font-medium'>{shift.date}</span>
-                    <span className='text-muted-foreground sm:text-foreground'>
-                      {shift.time}
-                    </span>
-                    <span className='text-muted-foreground'>
-                      {shift.details}
-                    </span>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className='space-y-6'>
+        <ScheduleSection
+          title='Current Shifts'
+          shifts={currentShifts}
+          emptyMessage='No current shifts yet. New assignments will appear here.'
+          onSelect={setActiveShiftId}
+        />
+        <ScheduleSection
+          title='Past Shifts'
+          shifts={pastShifts}
+          emptyMessage='No past shifts yet.'
+          onSelect={setActiveShiftId}
+        />
       </div>
 
       {activeShift ? (

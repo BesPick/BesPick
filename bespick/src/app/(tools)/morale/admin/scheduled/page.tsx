@@ -133,7 +133,7 @@ function ScheduledContent() {
 
   const handleEdit = React.useCallback(
     (id: AnnouncementId) => {
-      router.push(`/admin/create?edit=${id}`);
+      router.push(`/morale/admin/create?edit=${id}`);
     },
     [router]
   );
