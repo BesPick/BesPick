@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-01-21
+
+- fixes for ui on mobile
+- security shifts added to hosthub
+- backend for 892 assignments added
+- C-Suite group added
+
 ## [1.2.1] - 2026-01-21
 
 - Refactored all folders under src so that they are more readable. 
