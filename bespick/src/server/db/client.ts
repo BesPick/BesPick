@@ -121,6 +121,16 @@ CREATE TABLE IF NOT EXISTS schedule_event_overrides (
 );
 CREATE INDEX IF NOT EXISTS idx_schedule_event_overrides_date ON schedule_event_overrides(date);
 CREATE INDEX IF NOT EXISTS idx_schedule_event_overrides_type ON schedule_event_overrides(event_type);
+
+CREATE TABLE IF NOT EXISTS shift_notifications (
+  id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  event_date TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  sent_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shift_notifications_event ON shift_notifications(event_date, event_type);
+CREATE INDEX IF NOT EXISTS idx_shift_notifications_user ON shift_notifications(user_id);
 `);
 
 const announcementColumns = sqlite

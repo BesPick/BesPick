@@ -154,6 +154,24 @@ export const scheduleEventOverrides = sqliteTable(
   }),
 );
 
+export const shiftNotifications = sqliteTable(
+  'shift_notifications',
+  {
+    id: text('id').primaryKey(),
+    eventType: text('event_type').notNull(),
+    eventDate: text('event_date').notNull(),
+    userId: text('user_id').notNull(),
+    sentAt: integer('sent_at', { mode: 'number' }).notNull(),
+  },
+  (table) => ({
+    eventIdx: index('idx_shift_notifications_event').on(
+      table.eventDate,
+      table.eventType,
+    ),
+    userIdx: index('idx_shift_notifications_user').on(table.userId),
+  }),
+);
+
 export type AnnouncementRow = typeof announcements.$inferSelect;
 export type AnnouncementInsert = typeof announcements.$inferInsert;
 export type VotingPurchaseRow = typeof votingPurchases.$inferSelect;
@@ -172,3 +190,5 @@ export type ScheduleEventOverrideRow =
   typeof scheduleEventOverrides.$inferSelect;
 export type ScheduleEventOverrideInsert =
   typeof scheduleEventOverrides.$inferInsert;
+export type ShiftNotificationRow = typeof shiftNotifications.$inferSelect;
+export type ShiftNotificationInsert = typeof shiftNotifications.$inferInsert;

@@ -10,6 +10,7 @@ import {
   votingPurchases,
 } from '@/server/db/schema';
 import { deleteUploads } from '@/server/services/storage';
+import { notifyMoraleAnnouncementPublished } from '@/server/services/mattermost-notifications';
 import { broadcast } from '@/server/events';
 import { isValidGroup, isValidPortfolioForGroup } from '@/lib/org';
 import type {
@@ -593,6 +594,16 @@ export async function createAnnouncement(
   } else {
     broadcast(['announcements']);
   }
+  if (status === 'published') {
+    try {
+      await notifyMoraleAnnouncementPublished({
+        title: record.title,
+        eventType: eventType,
+      });
+    } catch (error) {
+      console.error('Failed to notify Mattermost about announcement', error);
+    }
+  }
   return { id: id as Id<'announcements'>, status };
 }
 
@@ -646,6 +657,7 @@ export async function updateAnnouncement(
   if (!identity) throw new Error('Unauthorized');
   const existing = await getAnnouncement(args.id);
   if (!existing) throw new Error('Activity not found');
+  const wasPublished = existing.status === 'published';
 
   const now = Date.now();
   const cleanedTitle = args.title.trim();
@@ -926,6 +938,17 @@ export async function updateAnnouncement(
     })
     .where(eq(announcements.id, args.id));
 
+  if (!wasPublished && status === 'published') {
+    try {
+      await notifyMoraleAnnouncementPublished({
+        title: cleanedTitle,
+        eventType,
+      });
+    } catch (error) {
+      console.error('Failed to notify Mattermost about announcement', error);
+    }
+  }
+
   if (removedImageIds.length > 0) {
     await deleteUploads(removedImageIds);
   }
@@ -954,6 +977,14 @@ export async function publishDue(now: number) {
       .update(announcements)
       .set({ status: 'published' })
       .where(eq(announcements.id, announcement.id));
+    try {
+      await notifyMoraleAnnouncementPublished({
+        title: announcement.title,
+        eventType: announcement.eventType as AnnouncementDoc['eventType'],
+      });
+    } catch (error) {
+      console.error('Failed to notify Mattermost about announcement', error);
+    }
   }
 
   const candidates = await db.select().from(announcements);
