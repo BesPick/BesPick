@@ -24,6 +24,14 @@ const ALL_RANKS = [...ENLISTED_RANKS, ...OFFICER_RANKS].map(
 );
 const UNASSIGNED_VALUE = 'unassigned';
 
+const escapeCsvValue = (value: string) => {
+  const escaped = value.replace(/"/g, '""');
+  return /[",\n]/.test(escaped) ? `"${escaped}"` : escaped;
+};
+
+const buildCsv = (rows: string[][]) =>
+  rows.map((row) => row.map(escapeCsvValue).join(',')).join('\n');
+
 export default async function AdminRosterPage({
   searchParams,
 }: {
@@ -259,6 +267,58 @@ export default async function AdminRosterPage({
     ? `Showing ${sortedUsers.length} of ${users.length} users`
     : `Showing ${sortedUsers.length} users`;
 
+  const rosterEntries = sortedUsers.map((entry) => {
+    const user = entry.user;
+    const fullName =
+      `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
+      user.username ||
+      'Unnamed User';
+    return {
+      id: user.id,
+      fullName,
+      email: primaryEmail(user),
+      role: entry.normalizedRole,
+      group: entry.normalizedGroup,
+      portfolio: entry.normalizedPortfolio,
+      rankCategory: entry.normalizedRankCategory,
+      rank: entry.normalizedRank,
+      rawRole: (user.publicMetadata.role as string) ?? null,
+    };
+  });
+
+  const csvRows = [
+    [
+      'Full Name',
+      'Email',
+      'Role',
+      'Group',
+      'Portfolio',
+      'Rank Category',
+      'Rank',
+    ],
+    ...rosterEntries.map((entry) => {
+      const roleLabel =
+        entry.role === 'admin'
+          ? 'Admin'
+          : entry.role === 'moderator'
+          ? 'Moderator'
+          : 'Member';
+      return [
+        entry.fullName,
+        entry.email,
+        roleLabel,
+        entry.group ?? 'No group assigned',
+        entry.portfolio ?? 'No portfolio assigned',
+        entry.rankCategory ?? 'No rank category',
+        entry.rank ?? 'No rank assigned',
+      ];
+    }),
+  ];
+  const csvContent = buildCsv(csvRows);
+  const csvHref = `data:text/csv;charset=utf-8,${encodeURIComponent(
+    csvContent,
+  )}`;
+
   return (
     <div className='mx-auto w-full max-w-5xl space-y-8 px-4 py-10'>
       <header className='rounded-2xl border border-border bg-card p-6 shadow-sm'>
@@ -276,8 +336,29 @@ export default async function AdminRosterPage({
         <SearchUsers />
       </section>
 
-      <div className='rounded-2xl border border-border bg-card/70 px-4 py-3 text-sm text-muted-foreground shadow-sm'>
+      <div className='flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3 text-sm text-muted-foreground shadow-sm'>
         <span className='font-semibold text-foreground'>{countLabel}</span>
+        <div className='flex flex-wrap items-center gap-2'>
+          {hasFilters ? (
+            <a
+              className='inline-flex items-center justify-center rounded-md border border-border bg-secondary/60 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+              href='/morale/admin/roster'
+            >
+              Clear filters
+            </a>
+          ) : (
+            <span className='inline-flex items-center justify-center rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm font-medium text-muted-foreground'>
+              Clear filters
+            </span>
+          )}
+          <a
+            className='inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+            href={csvHref}
+            download='morale-roster.csv'
+          >
+            Download CSV
+          </a>
+        </div>
       </div>
 
       <section className='space-y-4'>
@@ -288,28 +369,22 @@ export default async function AdminRosterPage({
               : 'Search for a user to view and manage their roles data.'}
           </p>
         ) : (
-          sortedUsers.map((entry) => {
-            const user = entry.user;
-            return (
-              <UserRoleCard
-                key={user.id}
-                user={{
-                  id: user.id,
-                  fullName:
-                    `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
-                    user.username ||
-                    'Unnamed User',
-                  email: primaryEmail(user),
-                  role: (user.publicMetadata.role as string) ?? null,
-                  group: entry.normalizedGroup,
-                  portfolio: entry.normalizedPortfolio,
-                  rankCategory: entry.normalizedRankCategory,
-                  rank: entry.normalizedRank,
-                }}
-                canEdit={canEditRoster}
-              />
-            );
-          })
+          rosterEntries.map((entry) => (
+            <UserRoleCard
+              key={entry.id}
+              user={{
+                id: entry.id,
+                fullName: entry.fullName,
+                email: entry.email,
+                role: entry.rawRole,
+                group: entry.group,
+                portfolio: entry.portfolio,
+                rankCategory: entry.rankCategory,
+                rank: entry.rank,
+              }}
+              canEdit={canEditRoster}
+            />
+          ))
         )}
       </section>
     </div>

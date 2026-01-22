@@ -67,6 +67,24 @@ export function UserRoleCard({
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const roleLabel = formatRoleLabel(currentRole);
+  const infoFields = [
+    {
+      label: 'Rank Category',
+      value: currentRankCategory ?? 'No rank category',
+    },
+    {
+      label: 'Rank',
+      value: currentRank ?? 'No rank assigned',
+    },
+    {
+      label: 'Group',
+      value: currentGroup ?? 'No group assigned',
+    },
+    {
+      label: 'Portfolio',
+      value: currentPortfolio ?? 'No portfolio assigned',
+    },
+  ];
 
   useEffect(() => {
     return () => {
@@ -286,89 +304,108 @@ export function UserRoleCard({
             <ChevronDown className='h-4 w-4 text-muted-foreground' aria-hidden={true} />
           </summary>
 
-          <div className='mt-4 grid gap-4 sm:grid-cols-2'>
-            <label className='flex flex-col gap-2 text-sm text-foreground'>
-              Rank Category
-              <select
-                value={currentRankCategory ?? ''}
-                onChange={(event) =>
-                  handleRankCategoryChange(event.target.value)
-                }
-                disabled={isPending || !canEdit}
-                className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
-              >
-                <option value=''>No rank category</option>
-                {RANK_CATEGORY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {canEdit ? (
+            <>
+              <div className='mt-4 grid gap-4 sm:grid-cols-2'>
+                <label className='flex flex-col gap-2 text-sm text-foreground'>
+                  Rank Category
+                  <select
+                    value={currentRankCategory ?? ''}
+                    onChange={(event) =>
+                      handleRankCategoryChange(event.target.value)
+                    }
+                    disabled={isPending || !canEdit}
+                    className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
+                  >
+                    <option value=''>No rank category</option>
+                    {RANK_CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <label className='flex flex-col gap-2 text-sm text-foreground'>
-              Rank
-              <select
-                value={currentRank ?? ''}
-                onChange={(event) => handleRankChange(event.target.value)}
-                disabled={rankSelectDisabled}
-                className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
-              >
-                <option value=''>No rank assigned</option>
-                {availableRanks.map((rankOption) => (
-                  <option key={rankOption} value={rankOption}>
-                    {rankOption}
-                  </option>
-                ))}
-              </select>
-              <span className='text-xs text-muted-foreground'>
-                {rankSelectDisabled
-                  ? 'Select a rank category with levels to enable this field.'
-                  : ''}
-              </span>
-            </label>
-          </div>
+                <label className='flex flex-col gap-2 text-sm text-foreground'>
+                  Rank
+                  <select
+                    value={currentRank ?? ''}
+                    onChange={(event) => handleRankChange(event.target.value)}
+                    disabled={rankSelectDisabled}
+                    className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
+                  >
+                    <option value=''>No rank assigned</option>
+                    {availableRanks.map((rankOption) => (
+                      <option key={rankOption} value={rankOption}>
+                        {rankOption}
+                      </option>
+                    ))}
+                  </select>
+                  <span className='text-xs text-muted-foreground'>
+                    {rankSelectDisabled
+                      ? 'Select a rank category with levels to enable this field.'
+                      : ''}
+                  </span>
+                </label>
+              </div>
 
-          <div className='mt-4 grid gap-4 sm:grid-cols-2'>
-            <label className='flex flex-col gap-2 text-sm text-foreground'>
-              Group
-              <select
-                value={currentGroup ?? ''}
-                onChange={(event) => handleGroupChange(event.target.value)}
-                disabled={isPending || !canEdit}
-                className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
-              >
-                <option value=''>No group assigned</option>
-                {GROUP_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <div className='mt-4 grid gap-4 sm:grid-cols-2'>
+                <label className='flex flex-col gap-2 text-sm text-foreground'>
+                  Group
+                  <select
+                    value={currentGroup ?? ''}
+                    onChange={(event) => handleGroupChange(event.target.value)}
+                    disabled={isPending || !canEdit}
+                    className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
+                  >
+                    <option value=''>No group assigned</option>
+                    {GROUP_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <label className='flex flex-col gap-2 text-sm text-foreground'>
-              Portfolio
-              <select
-                value={currentPortfolio ?? ''}
-                onChange={(event) => handlePortfolioChange(event.target.value)}
-                disabled={portfolioSelectDisabled}
-                className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
-              >
-                <option value=''>No portfolio assigned</option>
-                {availablePortfolios.map((portfolioOption) => (
-                  <option key={portfolioOption} value={portfolioOption}>
-                    {portfolioOption}
-                  </option>
-                ))}
-              </select>
-              <span className='text-xs text-muted-foreground'>
-                {availablePortfolios.length === 0
-                  ? 'Select a group with portfolios to enable this field.'
-                  : ''}
-              </span>
-            </label>
-          </div>
+                <label className='flex flex-col gap-2 text-sm text-foreground'>
+                  Portfolio
+                  <select
+                    value={currentPortfolio ?? ''}
+                    onChange={(event) =>
+                      handlePortfolioChange(event.target.value)
+                    }
+                    disabled={portfolioSelectDisabled}
+                    className='rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60'
+                  >
+                    <option value=''>No portfolio assigned</option>
+                    {availablePortfolios.map((portfolioOption) => (
+                      <option key={portfolioOption} value={portfolioOption}>
+                        {portfolioOption}
+                      </option>
+                    ))}
+                  </select>
+                  <span className='text-xs text-muted-foreground'>
+                    {availablePortfolios.length === 0
+                      ? 'Select a group with portfolios to enable this field.'
+                      : ''}
+                  </span>
+                </label>
+              </div>
+            </>
+          ) : (
+            <div className='mt-4 grid gap-4 sm:grid-cols-2'>
+              {infoFields.map((field) => (
+                <div key={field.label} className='flex flex-col gap-1'>
+                  <span className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>
+                    {field.label}
+                  </span>
+                  <span className='text-sm font-semibold text-foreground'>
+                    {field.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </details>
       </article>
 

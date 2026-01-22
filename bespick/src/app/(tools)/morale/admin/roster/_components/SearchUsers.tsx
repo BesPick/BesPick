@@ -35,6 +35,43 @@ export const SearchUsers = () => {
   const [rankCategory, setRankCategory] = useState(rankCategoryValue);
   const [rank, setRank] = useState(rankValue);
 
+  const buildQueryParams = ({
+    searchTerm,
+    roleValue,
+    groupValue,
+    portfolioValue,
+    rankCategoryValue,
+    rankValue,
+  }: {
+    searchTerm: string;
+    roleValue: string;
+    groupValue: string;
+    portfolioValue: string;
+    rankCategoryValue: string;
+    rankValue: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (searchTerm.trim()) {
+      params.set('search', searchTerm.trim());
+    }
+    if (roleValue) {
+      params.set('role', roleValue);
+    }
+    if (groupValue) {
+      params.set('group', groupValue);
+    }
+    if (portfolioValue) {
+      params.set('portfolio', portfolioValue);
+    }
+    if (rankCategoryValue) {
+      params.set('rankCategory', rankCategoryValue);
+    }
+    if (rankValue) {
+      params.set('rank', rankValue);
+    }
+    return params;
+  };
+
   useEffect(() => {
     setRole(roleValue);
     setGroup(groupValue);
@@ -104,6 +141,31 @@ export const SearchUsers = () => {
     }
   }, [rank, rankOptions]);
 
+  useEffect(() => {
+    const params = buildQueryParams({
+      searchTerm: searchValue,
+      roleValue: role,
+      groupValue: group,
+      portfolioValue: portfolio,
+      rankCategoryValue: rankCategory,
+      rankValue: rank,
+    });
+    const nextQuery = params.toString();
+    const currentQuery = searchParams.toString();
+    if (nextQuery === currentQuery) return;
+    router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  }, [
+    group,
+    pathname,
+    portfolio,
+    rank,
+    rankCategory,
+    role,
+    router,
+    searchParams,
+    searchValue,
+  ]);
+
   return (
     <div className='space-y-3'>
       <h2 className='text-xl font-semibold text-foreground'>Find a user</h2>
@@ -123,25 +185,14 @@ export const SearchUsers = () => {
           const rankCategoryValue =
             (formData.get('rankCategory') as string) ?? '';
           const rankValue = (formData.get('rank') as string) ?? '';
-          const params = new URLSearchParams();
-          if (queryTerm?.trim()) {
-            params.set('search', queryTerm.trim());
-          }
-          if (roleValue) {
-            params.set('role', roleValue);
-          }
-          if (groupValue) {
-            params.set('group', groupValue);
-          }
-          if (portfolioValue) {
-            params.set('portfolio', portfolioValue);
-          }
-          if (rankCategoryValue) {
-            params.set('rankCategory', rankCategoryValue);
-          }
-          if (rankValue) {
-            params.set('rank', rankValue);
-          }
+          const params = buildQueryParams({
+            searchTerm: queryTerm,
+            roleValue,
+            groupValue,
+            portfolioValue,
+            rankCategoryValue,
+            rankValue,
+          });
           const query = params.toString();
           router.push(query ? `${pathname}?${query}` : pathname);
         }}
