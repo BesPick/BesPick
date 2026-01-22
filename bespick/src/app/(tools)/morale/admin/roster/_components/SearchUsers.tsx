@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   usePathname,
   useRouter,
@@ -29,11 +29,20 @@ export const SearchUsers = () => {
   const rankCategoryValue = searchParams.get('rankCategory') ?? '';
   const rankValue = searchParams.get('rank') ?? '';
 
+  const [searchTerm, setSearchTerm] = useState(searchValue);
   const [role, setRole] = useState(roleValue);
   const [group, setGroup] = useState(groupValue);
   const [portfolio, setPortfolio] = useState(portfolioValue);
   const [rankCategory, setRankCategory] = useState(rankCategoryValue);
   const [rank, setRank] = useState(rankValue);
+  const hasFilters = Boolean(
+    searchTerm ||
+      role ||
+      group ||
+      portfolio ||
+      rankCategory ||
+      rank,
+  );
 
   const buildQueryParams = ({
     searchTerm,
@@ -73,6 +82,7 @@ export const SearchUsers = () => {
   };
 
   useEffect(() => {
+    setSearchTerm(searchValue);
     setRole(roleValue);
     setGroup(groupValue);
     setPortfolio(portfolioValue);
@@ -84,6 +94,7 @@ export const SearchUsers = () => {
     portfolioValue,
     rankCategoryValue,
     rankValue,
+    searchValue,
   ]);
 
   const allPortfolios = useMemo<string[]>(
@@ -141,30 +152,98 @@ export const SearchUsers = () => {
     }
   }, [rank, rankOptions]);
 
-  useEffect(() => {
-    const params = buildQueryParams({
-      searchTerm: searchValue,
-      roleValue: role,
-      groupValue: group,
-      portfolioValue: portfolio,
-      rankCategoryValue: rankCategory,
-      rankValue: rank,
-    });
-    const nextQuery = params.toString();
-    const currentQuery = searchParams.toString();
-    if (nextQuery === currentQuery) return;
-    router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname);
-  }, [
-    group,
-    pathname,
-    portfolio,
-    rank,
-    rankCategory,
-    role,
-    router,
-    searchParams,
-    searchValue,
-  ]);
+  const applyFilters = useCallback(
+    ({
+      nextRole = role,
+      nextGroup = group,
+      nextPortfolio = portfolio,
+      nextRankCategory = rankCategory,
+      nextRank = rank,
+      nextSearchTerm = searchValue,
+    }: {
+      nextRole?: string;
+      nextGroup?: string;
+      nextPortfolio?: string;
+      nextRankCategory?: string;
+      nextRank?: string;
+      nextSearchTerm?: string;
+    }) => {
+      const params = buildQueryParams({
+        searchTerm: nextSearchTerm,
+        roleValue: nextRole,
+        groupValue: nextGroup,
+        portfolioValue: nextPortfolio,
+        rankCategoryValue: nextRankCategory,
+        rankValue: nextRank,
+      });
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname);
+    },
+    [
+      group,
+      pathname,
+      portfolio,
+      rank,
+      rankCategory,
+      role,
+      router,
+      searchValue,
+    ],
+  );
+
+  const handleRoleChange = (value: string) => {
+    setRole(value);
+    applyFilters({ nextRole: value });
+  };
+
+  const handleGroupChange = (value: string) => {
+    const nextGroup = value;
+    const available = nextGroup && isValidGroup(nextGroup)
+      ? getPortfoliosForGroup(nextGroup).map(
+          (entry) => entry as string,
+        )
+      : [];
+    const nextPortfolio =
+      nextGroup &&
+      portfolio &&
+      available.includes(portfolio) &&
+      portfolio !== UNASSIGNED_VALUE
+        ? portfolio
+        : '';
+    setGroup(nextGroup);
+    setPortfolio(nextPortfolio);
+    applyFilters({ nextGroup, nextPortfolio });
+  };
+
+  const handlePortfolioChange = (value: string) => {
+    setPortfolio(value);
+    applyFilters({ nextPortfolio: value });
+  };
+
+  const handleRankCategoryChange = (value: string) => {
+    const nextCategory = value;
+    const available =
+      nextCategory === 'Enlisted' || nextCategory === 'Officer'
+        ? getRanksForCategory(nextCategory).map(
+            (entry) => entry as string,
+          )
+        : [];
+    const nextRank =
+      nextCategory &&
+      rank &&
+      available.includes(rank) &&
+      rank !== UNASSIGNED_VALUE
+        ? rank
+        : '';
+    setRankCategory(nextCategory);
+    setRank(nextRank);
+    applyFilters({ nextRankCategory: nextCategory, nextRank });
+  };
+
+  const handleRankChange = (value: string) => {
+    setRank(value);
+    applyFilters({ nextRank: value });
+  };
 
   return (
     <div className='space-y-3'>
@@ -175,26 +254,14 @@ export const SearchUsers = () => {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const form = e.currentTarget;
-          const formData = new FormData(form);
-          const queryTerm = (formData.get('search') as string) ?? '';
-          const roleValue = (formData.get('role') as string) ?? '';
-          const groupValue = (formData.get('group') as string) ?? '';
-          const portfolioValue =
-            (formData.get('portfolio') as string) ?? '';
-          const rankCategoryValue =
-            (formData.get('rankCategory') as string) ?? '';
-          const rankValue = (formData.get('rank') as string) ?? '';
-          const params = buildQueryParams({
-            searchTerm: queryTerm,
-            roleValue,
-            groupValue,
-            portfolioValue,
-            rankCategoryValue,
-            rankValue,
+          applyFilters({
+            nextSearchTerm: searchTerm,
+            nextRole: role,
+            nextGroup: group,
+            nextPortfolio: portfolio,
+            nextRankCategory: rankCategory,
+            nextRank: rank,
           });
-          const query = params.toString();
-          router.push(query ? `${pathname}?${query}` : pathname);
         }}
         className='space-y-4'
       >
@@ -206,17 +273,36 @@ export const SearchUsers = () => {
               name='search'
               type='text'
               autoComplete='off'
-              defaultValue={searchValue}
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
               placeholder='Enter a name or email'
               className='mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
             />
           </label>
-          <button
-            type='submit'
-            className='inline-flex w-full items-center justify-center rounded-md border border-border bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto'
-          >
-            Search
-          </button>
+          <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center'>
+            <button
+              type='button'
+              onClick={() => {
+                setSearchTerm('');
+                setRole('');
+                setGroup('');
+                setPortfolio('');
+                setRankCategory('');
+                setRank('');
+                router.push(pathname);
+              }}
+              disabled={!hasFilters}
+              className='inline-flex w-full items-center justify-center rounded-md border border-border bg-secondary/70 px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto'
+            >
+              Clear filters
+            </button>
+            <button
+              type='submit'
+              className='inline-flex w-full items-center justify-center rounded-md border border-border bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto'
+            >
+              Search
+            </button>
+          </div>
         </div>
 
         <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-5'>
@@ -226,7 +312,7 @@ export const SearchUsers = () => {
               id='role'
               name='role'
               value={role}
-              onChange={(event) => setRole(event.target.value)}
+              onChange={(event) => handleRoleChange(event.target.value)}
               className='mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
             >
               <option value=''>All roles</option>
@@ -241,7 +327,7 @@ export const SearchUsers = () => {
               id='group'
               name='group'
               value={group}
-              onChange={(event) => setGroup(event.target.value)}
+              onChange={(event) => handleGroupChange(event.target.value)}
               className='mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
             >
               <option value=''>All groups</option>
@@ -259,7 +345,7 @@ export const SearchUsers = () => {
               id='portfolio'
               name='portfolio'
               value={portfolio}
-              onChange={(event) => setPortfolio(event.target.value)}
+              onChange={(event) => handlePortfolioChange(event.target.value)}
               className='mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
             >
               <option value=''>All portfolios</option>
@@ -280,9 +366,7 @@ export const SearchUsers = () => {
               id='rankCategory'
               name='rankCategory'
               value={rankCategory}
-              onChange={(event) =>
-                setRankCategory(event.target.value)
-              }
+              onChange={(event) => handleRankCategoryChange(event.target.value)}
               className='mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
             >
               <option value=''>All categories</option>
@@ -300,7 +384,7 @@ export const SearchUsers = () => {
               id='rank'
               name='rank'
               value={rank}
-              onChange={(event) => setRank(event.target.value)}
+              onChange={(event) => handleRankChange(event.target.value)}
               className='mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
             >
               <option value=''>All ranks</option>

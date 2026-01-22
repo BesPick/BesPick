@@ -95,6 +95,13 @@ export const uploads = sqliteTable('uploads', {
   createdAt: integer('created_at', { mode: 'number' }).notNull(),
 });
 
+export const siteSettings = sqliteTable('site_settings', {
+  id: text('id').primaryKey(),
+  configJson: text('config_json').notNull(),
+  updatedAt: integer('updated_at', { mode: 'number' }).notNull(),
+  updatedBy: text('updated_by'),
+});
+
 export const demoDayAssignments = sqliteTable(
   'demo_day_assignments',
   {
@@ -195,6 +202,8 @@ export type VotingPurchaseRow = typeof votingPurchases.$inferSelect;
 export type VotingPurchaseInsert = typeof votingPurchases.$inferInsert;
 export type PollVoteRow = typeof pollVotes.$inferSelect;
 export type PollVoteInsert = typeof pollVotes.$inferInsert;
+export type SiteSettingRow = typeof siteSettings.$inferSelect;
+export type SiteSettingInsert = typeof siteSettings.$inferInsert;
 export type DemoDayAssignmentRow = typeof demoDayAssignments.$inferSelect;
 export type DemoDayAssignmentInsert = typeof demoDayAssignments.$inferInsert;
 export type StandupAssignmentRow = typeof standupAssignments.$inferSelect;

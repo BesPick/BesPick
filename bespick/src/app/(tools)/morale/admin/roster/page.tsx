@@ -338,27 +338,13 @@ export default async function AdminRosterPage({
 
       <div className='flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3 text-sm text-muted-foreground shadow-sm'>
         <span className='font-semibold text-foreground'>{countLabel}</span>
-        <div className='flex flex-wrap items-center gap-2'>
-          {hasFilters ? (
-            <a
-              className='inline-flex items-center justify-center rounded-md border border-border bg-secondary/60 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-              href='/morale/admin/roster'
-            >
-              Clear filters
-            </a>
-          ) : (
-            <span className='inline-flex items-center justify-center rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm font-medium text-muted-foreground'>
-              Clear filters
-            </span>
-          )}
-          <a
-            className='inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-            href={csvHref}
-            download='morale-roster.csv'
-          >
-            Download CSV
-          </a>
-        </div>
+        <a
+          className='inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+          href={csvHref}
+          download='morale-roster.csv'
+        >
+          Download CSV
+        </a>
       </div>
 
       <section className='space-y-4'>

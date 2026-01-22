@@ -78,6 +78,13 @@ CREATE TABLE IF NOT EXISTS uploads (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS site_settings (
+  id TEXT PRIMARY KEY,
+  config_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  updated_by TEXT
+);
+
 CREATE TABLE IF NOT EXISTS demo_day_assignments (
   date TEXT PRIMARY KEY,
   user_id TEXT,

@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import {
   ClerkLoaded,
   ClerkLoading,
@@ -12,6 +19,7 @@ import {
   HeartPulse,
   Menu,
   Server,
+  Settings,
   Users,
   X,
 } from 'lucide-react';
@@ -32,6 +40,11 @@ import {
   type RankCategory,
 } from '@/lib/org';
 import { updateMyAssignments } from '@/server/actions/assignments';
+import {
+  ASSIGNMENT_MODAL_EVENT,
+  type AssignmentModalEventDetail,
+  type AssignmentModalFocus,
+} from '@/lib/assignment-modal-events';
 
 export function HeaderActions() {
   const { user } = useUser();
@@ -82,17 +95,23 @@ export function HeaderActions() {
       ? 'N/A'
       : 'No rank assigned');
 
-  const openAssignmentModal = (
-    focus: 'group' | 'portfolio' | 'rankCategory' | 'rank',
-  ) => {
-    setAssignmentGroup(normalizedGroup ?? '');
-    setAssignmentPortfolio(normalizedPortfolio ?? '');
-    setAssignmentRankCategory(normalizedRankCategory ?? '');
-    setAssignmentRank(normalizedRank ?? '');
-    setAssignmentFocus(focus);
-    setAssignmentError(null);
-    setIsAssignmentOpen(true);
-  };
+  const openAssignmentModal = useCallback(
+    (focus: AssignmentModalFocus) => {
+      setAssignmentGroup(normalizedGroup ?? '');
+      setAssignmentPortfolio(normalizedPortfolio ?? '');
+      setAssignmentRankCategory(normalizedRankCategory ?? '');
+      setAssignmentRank(normalizedRank ?? '');
+      setAssignmentFocus(focus);
+      setAssignmentError(null);
+      setIsAssignmentOpen(true);
+    },
+    [
+      normalizedGroup,
+      normalizedPortfolio,
+      normalizedRank,
+      normalizedRankCategory,
+    ],
+  );
 
   const closeAssignmentModal = () => {
     if (isAssignmentPending) return;
@@ -115,8 +134,16 @@ export function HeaderActions() {
       });
     }
 
+    if (isAdmin) {
+      items.push({
+        href: '/admin/settings',
+        label: 'Settings',
+        icon: Settings,
+      });
+    }
+
     return items;
-  }, [isMoraleAdmin]);
+  }, [isAdmin, isMoraleAdmin]);
 
   useEffect(() => {
     if (!open) {
@@ -147,6 +174,25 @@ export function HeaderActions() {
       document.removeEventListener('keydown', handleKey);
     };
   }, [open]);
+
+  useEffect(() => {
+    const handleOpenAssignment = (event: Event) => {
+      const detail =
+        (event as CustomEvent<AssignmentModalEventDetail>).detail ?? {};
+      openAssignmentModal(detail.focus ?? 'group');
+    };
+
+    window.addEventListener(
+      ASSIGNMENT_MODAL_EVENT,
+      handleOpenAssignment as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        ASSIGNMENT_MODAL_EVENT,
+        handleOpenAssignment as EventListener,
+      );
+    };
+  }, [openAssignmentModal]);
 
   const toggleMenu = () => setOpen((prev) => !prev);
   const closeMenu = () => setOpen(false);
