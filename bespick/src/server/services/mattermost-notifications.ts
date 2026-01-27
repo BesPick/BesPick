@@ -162,7 +162,7 @@ export async function notifyMoraleAnnouncementPublished(
     announcement.eventType === 'announcements'
       ? 'Announcement'
       : formatEventType(announcement.eventType);
-  const message = `New ${label} card posted: **${announcement.title}**\n${moraleUrl}`;
+  const message = `@all | New ${label} card posted: **${announcement.title}**\n${moraleUrl}`;
   await postMattermostMessage(channelId, message);
 }
 
